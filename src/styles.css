@@ -12,7 +12,7 @@
   --serif: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --panel-w: 380px;
-  --timeline-h: 190px;
+  --timeline-h: 206px;
   --gutter: 16px;
   color-scheme: dark;
 }
@@ -526,6 +526,13 @@ a:hover {
 .event-title {
   color: var(--ink);
 }
+.event-src {
+  margin-left: 6px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
 .nav-row {
   display: flex;
   align-items: center;
@@ -665,8 +672,11 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 .lens-event-label {
-  font-size: 10.5px;
+  font-size: 10px;
   fill: var(--ink);
+  paint-order: stroke;
+  stroke: rgba(24, 27, 33, 0.85);
+  stroke-width: 3px;
 }
 .lens-event-label.hl {
   fill: var(--accent);

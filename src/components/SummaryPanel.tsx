@@ -170,7 +170,7 @@ export default function SummaryPanel({
             {window === 0 ? `Events in ${formatYear(year, { ad: false })}` : `Events around ${formatYear(year, { ad: false })} (± ${window} years)`}
           </div>
           {visibleEvents.length === 0 ? (
-            <p className="panel-text muted">No curated events for this year.</p>
+            <p className="panel-text muted">No events recorded for this year.</p>
           ) : (
             <ul className="event-list">
               {[...exact, ...nearby].map((ev) => (
@@ -181,7 +181,10 @@ export default function SummaryPanel({
                   >
                     <span className="event-dot" style={{ background: CATEGORY_META[ev.category].color }} />
                     <span className="event-year">{formatYear(ev.year, { approx: ev.approx, ad: false })}</span>
-                    <span className="event-title">{ev.title}</span>
+                    <span className="event-title">
+                      {ev.title}
+                      {ev.source === 'wikidata' ? <span className="event-src">Wikidata</span> : null}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -201,8 +204,8 @@ export default function SummaryPanel({
         <footer className="panel-foot">
           Borders from the open <a href="https://github.com/aourednik/historical-basemaps" target="_blank" rel="noreferrer">historical-basemaps</a> project
           (GPL-3.0), simplified for display. They are scholarly approximations — dashed lines mark uncertain frontiers — and most
-          pre-modern boundaries are zones of influence rather than lines. Events are hand-curated with links to Wikipedia for
-          verification.
+          pre-modern boundaries are zones of influence rather than lines. Major events are hand-curated; a Wikidata
+          supplement adds further dated, geolocated items. Each links to Wikipedia.
         </footer>
       </div>
     </aside>

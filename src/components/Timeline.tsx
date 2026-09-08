@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ERAS } from '../data/eras';
-import { CATEGORY_META, EVENTS, type HistoricalEvent } from '../data/events';
+import { ALL_EVENTS, CATEGORY_META, type HistoricalEvent } from '../data/events';
 import { SNAPSHOT_YEARS } from '../data/snapshots';
 import {
   MAX_YEAR,
@@ -26,15 +26,19 @@ interface TimelineProps {
 // ── Geometry constants ────────────────────────────────────────────────────
 const PAD_L = 18;
 const PAD_R = 18;
-const SVG_H = 128;
-const LENS_TOP = 4;
-const LENS_H = 62;
+const SVG_H = 142;
+const LENS_TOP = 2;
+const LENS_H = 76;
 const LENS_BOTTOM = LENS_TOP + LENS_H;
-const BAND_TOP = 86;
+const BAND_TOP = 100;
 const BAND_H = 20;
 const BAND_BOTTOM = BAND_TOP + BAND_H;
 const LABEL_Y = BAND_BOTTOM + 18;
 const LENS_ZOOM = 8;
+const LENS_AXIS_Y = LENS_BOTTOM - 16;
+const LABEL_ROWS = 2;
+const LABEL_ROW_H = 14;
+const LABEL_MAX = 6;
 
 const MACRO_TICK_YEARS = [
   MIN_YEAR, 1 - 4000, 1 - 3000, 1 - 2000, 1 - 1500, 1 - 1000, 1 - 500, 1, 250, 500, 750, 1000, 1250, 1500, 1600, 1700,
@@ -207,35 +211,65 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
 
   const eventTicks = useMemo(
     () =>
-      EVENTS.map((e) => ({
+      ALL_EVENTS.map((e) => ({
         id: e.id,
         x: xOf(e.year),
-        h: e.importance === 3 ? 15 : e.importance === 2 ? 10 : 6,
+        h: e.importance === 3 ? 15 : e.importance === 2 ? 10 : 5,
         color: CATEGORY_META[e.category].color,
+        minor: e.source === 'wikidata',
       })),
     [xOf],
   );
 
   const lensEvents = useMemo(() => {
     if (!lens) return [];
-    const inRange = EVENTS.filter((e) => e.year >= lens.start && e.year <= lens.end).sort(
-      (a, b) => b.importance - a.importance || a.year - b.year,
+    const inRange = ALL_EVENTS.filter((e) => e.year >= lens.start && e.year <= lens.end).sort(
+      (a, b) => b.importance - a.importance || (b.sitelinks ?? 0) - (a.sitelinks ?? 0) || a.year - b.year,
     );
-    // Greedy label placement: three text rows, skip titles that would collide.
-    const rows: number[][] = [[], [], []];
-    const placed: Array<{ ev: HistoricalEvent; x: number; row: number | null }> = [];
+    const labelPad = 6;
+    const rows: Array<Array<{ x0: number; x1: number }>> = Array.from({ length: LABEL_ROWS }, () => []);
+    let labelsUsed = 0;
+    const placed: Array<{
+      ev: HistoricalEvent;
+      x: number;
+      row: number | null;
+      textX: number;
+      anchor: 'start' | 'end';
+      short: string;
+    }> = [];
+
     for (const ev of inRange) {
       const x = lens.xOfLens(ev.year);
-      const estW = Math.min(150, 10 + ev.title.length * 5.4);
+      const raw = `${ev.approx ? 'c. ' : ''}${ev.title}`;
+      const short = raw.length > 28 ? `${raw.slice(0, 27)}…` : raw;
+      const w = 8 + Math.min(short.length, 28) * 5.4;
       let row: number | null = null;
-      for (let r = 0; r < rows.length; r++) {
-        if (rows[r].every((ox) => Math.abs(ox - x) > estW)) {
-          row = r;
-          rows[r].push(x);
-          break;
+      let textX = x + 5;
+      let anchor: 'start' | 'end' = 'start';
+      const canLabel = ev.importance >= 2 && labelsUsed < LABEL_MAX;
+
+      if (canLabel) {
+        const tryPlace = (a: 'start' | 'end') => {
+          const x0 = a === 'start' ? x + 5 : x - 5 - w;
+          const x1 = x0 + w;
+          if (x0 < lens.left + labelPad || x1 > lens.right - labelPad) return null;
+          for (let r = 0; r < rows.length; r++) {
+            if (rows[r].every((o) => x1 + 8 <= o.x0 || x0 >= o.x1 + 8)) {
+              return { r, x0, x1, a };
+            }
+          }
+          return null;
+        };
+        const fit = tryPlace('start') ?? tryPlace('end');
+        if (fit) {
+          row = fit.r;
+          textX = fit.a === 'start' ? fit.x0 : fit.x1;
+          anchor = fit.a;
+          rows[fit.r].push({ x0: fit.x0, x1: fit.x1 });
+          labelsUsed++;
         }
       }
-      placed.push({ ev, x, row });
+      placed.push({ ev, x, row, textX, anchor, short });
     }
     return placed;
   }, [lens]);
@@ -317,8 +351,8 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
               y1={BAND_TOP - 2}
               y2={BAND_TOP - 2 - t.h}
               stroke={t.color}
-              strokeWidth={t.id === highlightEventId ? 2.5 : 1.3}
-              opacity={t.id === highlightEventId ? 1 : 0.8}
+              strokeWidth={t.id === highlightEventId ? 2.5 : t.minor ? 0.9 : 1.3}
+              opacity={t.id === highlightEventId ? 1 : t.minor ? 0.4 : 0.8}
             />
           ))}
         </g>
@@ -363,55 +397,57 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
             />
             <rect x={lens.left} y={LENS_TOP} width={lensW} height={LENS_H} rx={8} fill="url(#lensGrad)" stroke="rgba(232,224,208,0.45)" strokeWidth={1} />
             {/* lens axis */}
-            <line x1={lens.left + 6} x2={lens.right - 6} y1={LENS_BOTTOM - 14} y2={LENS_BOTTOM - 14} stroke="rgba(232,224,208,0.35)" />
+            <clipPath id="lensClip">
+              <rect x={lens.left} y={LENS_TOP} width={lensW} height={LENS_H} rx={8} />
+            </clipPath>
+            <line x1={lens.left + 6} x2={lens.right - 6} y1={LENS_AXIS_Y} y2={LENS_AXIS_Y} stroke="rgba(232,224,208,0.35)" />
             {lensTicks.map((t) => (
               <g key={t.year}>
-                <line x1={t.x} x2={t.x} y1={LENS_BOTTOM - 17} y2={LENS_BOTTOM - 11} stroke="rgba(232,224,208,0.55)" />
+                <line x1={t.x} x2={t.x} y1={LENS_AXIS_Y - 3} y2={LENS_AXIS_Y + 3} stroke="rgba(232,224,208,0.55)" />
                 <text x={t.x} y={LENS_BOTTOM - 3} textAnchor="middle" className="lens-tick-label">
                   {t.label}
                 </text>
               </g>
             ))}
-            {/* snapshot boundaries inside lens */}
             {SNAPSHOT_YEARS.filter((y) => y >= lens.start && y <= lens.end).map((y) => {
               const x = lens.xOfLens(y);
-              return <line key={y} x1={x} x2={x} y1={LENS_TOP + 6} y2={LENS_BOTTOM - 14} stroke="rgba(232,224,208,0.22)" strokeDasharray="2 3" />;
+              return <line key={y} x1={x} x2={x} y1={LENS_TOP + 6} y2={LENS_AXIS_Y} stroke="rgba(232,224,208,0.22)" strokeDasharray="2 3" />;
             })}
-            {/* events inside lens */}
-            {lensEvents.map(({ ev, x, row }) => {
-              const color = CATEGORY_META[ev.category].color;
-              const isHl = ev.id === highlightEventId;
-              return (
-                <g
-                  key={ev.id}
-                  className="lens-event"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPickEvent?.(ev);
-                  }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <line x1={x} x2={x} y1={LENS_TOP + 8 + (row ?? 0) * 13} y2={LENS_BOTTOM - 14} stroke={color} strokeWidth={isHl ? 2 : 1} opacity={0.75} />
-                  <circle cx={x} cy={LENS_BOTTOM - 14} r={isHl ? 4 : 3} fill={color} stroke="#1b1e24" strokeWidth={1} />
-                  {row !== null && (
-                    <text x={x + 4} y={LENS_TOP + 12 + row * 13} className={`lens-event-label${isHl ? ' hl' : ''}`}>
-                      {ev.approx ? 'c. ' : ''}
-                      {ev.title.length > 34 ? ev.title.slice(0, 33) + '…' : ev.title}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-            {/* current year inside lens */}
+            <g clipPath="url(#lensClip)">
+              {lensEvents.map(({ ev, x, row, textX, anchor, short }) => {
+                const color = CATEGORY_META[ev.category].color;
+                const isHl = ev.id === highlightEventId;
+                const stemTop = row !== null ? LENS_TOP + 6 + row * LABEL_ROW_H : LENS_TOP + 10;
+                return (
+                  <g
+                    key={ev.id}
+                    className="lens-event"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPickEvent?.(ev);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <title>{`${ev.title} (${formatYear(ev.year, { approx: ev.approx, ad: false })})`}</title>
+                    <line x1={x} x2={x} y1={stemTop} y2={LENS_AXIS_Y} stroke={color} strokeWidth={isHl ? 2 : ev.importance >= 2 ? 1.2 : 0.8} opacity={0.7} />
+                    <circle cx={x} cy={LENS_AXIS_Y} r={isHl ? 4 : ev.importance >= 2 ? 3 : 2.2} fill={color} stroke="#1b1e24" strokeWidth={1} />
+                    {row !== null && (
+                      <text x={textX} y={LENS_TOP + 16 + row * LABEL_ROW_H} textAnchor={anchor} className={`lens-event-label${isHl ? ' hl' : ''}`}>
+                        {short}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
             {year >= lens.start && year <= lens.end && (
               <line x1={lens.xOfLens(year)} x2={lens.xOfLens(year)} y1={LENS_TOP + 2} y2={LENS_BOTTOM - 2} stroke="#f2e9d6" strokeWidth={1.5} />
             )}
-            {/* preview cursor inside lens */}
             {previewX !== null && preview !== null && (
               <g>
-                <line x1={previewX} x2={previewX} y1={LENS_TOP + 2} y2={LENS_BOTTOM - 2} stroke="rgba(255,255,255,0.6)" strokeDasharray="2 2" />
-                <rect x={previewX - 26} y={LENS_TOP - 2} width={52} height={14} rx={3} fill="#f2e9d6" />
-                <text x={previewX} y={LENS_TOP + 8.5} textAnchor="middle" className="lens-preview-label">
+                <line x1={previewX} x2={previewX} y1={LENS_TOP + 2} y2={LENS_BOTTOM - 2} stroke="rgba(255,255,255,0.55)" strokeDasharray="2 2" />
+                <rect x={previewX - 26} y={LENS_BOTTOM + 2} width={52} height={14} rx={3} fill="#f2e9d6" />
+                <text x={previewX} y={LENS_BOTTOM + 12.5} textAnchor="middle" className="lens-preview-label">
                   {formatYearShort(preview)}
                 </text>
               </g>

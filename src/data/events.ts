@@ -1,4 +1,5 @@
 import { BC } from '../lib/time';
+import wikidataEvents from './wikidata-events.json' with { type: 'json' };
 
 export type EventCategory =
   | 'politics'
@@ -25,6 +26,8 @@ export interface HistoricalEvent {
   importance: 1 | 2 | 3;
   /** English Wikipedia article title. */
   wiki: string;
+  source?: 'curated' | 'wikidata';
+  sitelinks?: number;
 }
 
 export const CATEGORY_META: Record<EventCategory, { label: string; color: string }> = {
@@ -50,7 +53,7 @@ function E(
   summary: string,
   approx = false,
 ): HistoricalEvent {
-  return { id: `ev${counter++}`, year, approx, title, summary, lat, lon, category, importance, wiki };
+  return { id: `ev${counter++}`, year, approx, title, summary, lat, lon, category, importance, wiki, source: 'curated' };
 }
 
 // Approximate helper: same as E but flags the date as approximate.
@@ -737,17 +740,41 @@ export const EVENTS: HistoricalEvent[] = [
 
 EVENTS.sort((a, b) => a.year - b.year || b.importance - a.importance);
 
+/** Hand-curated major events — used for [ ] / event-skip navigation. */
+export const CURATED_EVENTS = EVENTS;
+
+const EXTRA = (wikidataEvents as HistoricalEvent[]).map((e) => ({
+  ...e,
+  source: 'wikidata' as const,
+  importance: 1 as const,
+}));
+
+/** Curated events plus the Wikidata supplement, sorted by year. */
+export const ALL_EVENTS: HistoricalEvent[] = [...EVENTS, ...EXTRA].sort(
+  (a, b) => a.year - b.year || b.importance - a.importance,
+);
+
+const PANEL_EXTRA_CAP = 8;
+
 /** Events that fall inside the tolerance window around a year. */
-export function eventsNear(year: number, window: number): HistoricalEvent[] {
-  return EVENTS.filter((e) => Math.abs(e.year - year) <= window);
+export function eventsNear(year: number, window: number, keepId?: string | null): HistoricalEvent[] {
+  const inWin = ALL_EVENTS.filter((e) => Math.abs(e.year - year) <= window);
+  const curated = inWin.filter((e) => e.source !== 'wikidata');
+  const extra = inWin
+    .filter((e) => e.source === 'wikidata')
+    .sort((a, b) => (b.sitelinks ?? 0) - (a.sitelinks ?? 0));
+  const kept = keepId ? extra.find((e) => e.id === keepId) : undefined;
+  const capped = extra.filter((e) => e.id !== keepId).slice(0, PANEL_EXTRA_CAP);
+  if (kept) capped.unshift(kept);
+  return [...curated, ...capped].sort((a, b) => b.importance - a.importance || a.year - b.year);
 }
 
-/** Next event strictly after / before a year (for keyboard navigation). */
+/** Next curated event strictly after / before a year (keyboard + skip buttons). */
 export function nextEventYear(year: number): number | null {
-  const e = EVENTS.find((ev) => ev.year > year);
+  const e = CURATED_EVENTS.find((ev) => ev.year > year);
   return e ? e.year : null;
 }
 export function prevEventYear(year: number): number | null {
-  for (let i = EVENTS.length - 1; i >= 0; i--) if (EVENTS[i].year < year) return EVENTS[i].year;
+  for (let i = CURATED_EVENTS.length - 1; i >= 0; i--) if (CURATED_EVENTS[i].year < year) return CURATED_EVENTS[i].year;
   return null;
 }
