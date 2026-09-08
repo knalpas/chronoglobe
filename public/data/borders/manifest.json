@@ -1,0 +1,202 @@
+[
+  {
+    "suffix": "bc5000",
+    "bytes": 2147822
+  },
+  {
+    "suffix": "bc4000",
+    "bytes": 128318
+  },
+  {
+    "suffix": "bc3000",
+    "bytes": 129372
+  },
+  {
+    "suffix": "bc2000",
+    "bytes": 406155
+  },
+  {
+    "suffix": "bc1500",
+    "bytes": 410550
+  },
+  {
+    "suffix": "bc1000",
+    "bytes": 410222
+  },
+  {
+    "suffix": "bc700",
+    "bytes": 416040
+  },
+  {
+    "suffix": "bc500",
+    "bytes": 434465
+  },
+  {
+    "suffix": "bc400",
+    "bytes": 431029
+  },
+  {
+    "suffix": "bc323",
+    "bytes": 415142
+  },
+  {
+    "suffix": "bc300",
+    "bytes": 416078
+  },
+  {
+    "suffix": "bc200",
+    "bytes": 454316
+  },
+  {
+    "suffix": "bc100",
+    "bytes": 443287
+  },
+  {
+    "suffix": "bc1",
+    "bytes": 484789
+  },
+  {
+    "suffix": "100",
+    "bytes": 493590
+  },
+  {
+    "suffix": "200",
+    "bytes": 480663
+  },
+  {
+    "suffix": "300",
+    "bytes": 484529
+  },
+  {
+    "suffix": "400",
+    "bytes": 479569
+  },
+  {
+    "suffix": "500",
+    "bytes": 473358
+  },
+  {
+    "suffix": "600",
+    "bytes": 548251
+  },
+  {
+    "suffix": "700",
+    "bytes": 464354
+  },
+  {
+    "suffix": "800",
+    "bytes": 456343
+  },
+  {
+    "suffix": "900",
+    "bytes": 519734
+  },
+  {
+    "suffix": "1000",
+    "bytes": 520039
+  },
+  {
+    "suffix": "1100",
+    "bytes": 508534
+  },
+  {
+    "suffix": "1200",
+    "bytes": 491179
+  },
+  {
+    "suffix": "1279",
+    "bytes": 487458
+  },
+  {
+    "suffix": "1300",
+    "bytes": 477855
+  },
+  {
+    "suffix": "1400",
+    "bytes": 501444
+  },
+  {
+    "suffix": "1492",
+    "bytes": 1600356
+  },
+  {
+    "suffix": "1500",
+    "bytes": 223372
+  },
+  {
+    "suffix": "1530",
+    "bytes": 683792
+  },
+  {
+    "suffix": "1600",
+    "bytes": 957767
+  },
+  {
+    "suffix": "1650",
+    "bytes": 941499
+  },
+  {
+    "suffix": "1700",
+    "bytes": 931065
+  },
+  {
+    "suffix": "1715",
+    "bytes": 961079
+  },
+  {
+    "suffix": "1783",
+    "bytes": 503234
+  },
+  {
+    "suffix": "1800",
+    "bytes": 936384
+  },
+  {
+    "suffix": "1815",
+    "bytes": 428865
+  },
+  {
+    "suffix": "1880",
+    "bytes": 251769
+  },
+  {
+    "suffix": "1900",
+    "bytes": 260079
+  },
+  {
+    "suffix": "1914",
+    "bytes": 231232
+  },
+  {
+    "suffix": "1920",
+    "bytes": 268007
+  },
+  {
+    "suffix": "1930",
+    "bytes": 231743
+  },
+  {
+    "suffix": "1938",
+    "bytes": 709272
+  },
+  {
+    "suffix": "1945",
+    "bytes": 246173
+  },
+  {
+    "suffix": "1960",
+    "bytes": 231551
+  },
+  {
+    "suffix": "1994",
+    "bytes": 309010
+  },
+  {
+    "suffix": "2000",
+    "bytes": 308582
+  },
+  {
+    "suffix": "2010",
+    "bytes": 308573
+  }
+]
