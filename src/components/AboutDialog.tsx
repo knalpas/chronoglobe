@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import { CATEGORY_META } from '../data/events';
-import { EVENTS } from '../data/events';
+import { ALL_EVENTS, CATEGORY_META, CURATED_EVENTS } from '../data/events';
 import { SNAPSHOTS } from '../data/snapshots';
 
 interface AboutDialogProps {
@@ -65,10 +64,14 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
 
           <h3>Events</h3>
           <p>
-            The {EVENTS.length} events are hand-curated with an emphasis on developments that changed the political,
-            technological or cultural map. Each links to its Wikipedia article for verification. Dates marked
-            <i> c.</i> are approximate, traditional or debated. The curated list currently runs to 2024; add more in{' '}
-            <code>src/data/events.ts</code>.
+            {CURATED_EVENTS.length} events are hand-curated as the major layer — political, scientific and cultural
+            turning points, each with a short briefing. A further {ALL_EVENTS.length - CURATED_EVENTS.length} events
+            come from <a href="https://www.wikidata.org/" target="_blank" rel="noreferrer">Wikidata</a> (CC0), filtered
+            to items that have a date, coordinates, an English Wikipedia article, and enough language editions to be
+            notable. Individual battles and sieges are omitted from that layer (they already sit on the curated list
+            when they changed the map). Hover the timeline to read major events on a dated bar. Dates marked
+            <i> c.</i> are approximate, traditional or debated. Refresh the Wikidata layer with{' '}
+            <code>npm run fetch-events</code>.
           </p>
           <div className="legend">
             {Object.entries(CATEGORY_META).map(([k, m]) => (

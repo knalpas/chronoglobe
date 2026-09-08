@@ -4,7 +4,7 @@ import Timeline from './components/Timeline';
 import SummaryPanel from './components/SummaryPanel';
 import Header from './components/Header';
 import AboutDialog from './components/AboutDialog';
-import { EVENTS, eventsNear, nextEventYear, prevEventYear, type HistoricalEvent } from './data/events';
+import { ALL_EVENTS, eventsNear, nextEventYear, prevEventYear, type HistoricalEvent } from './data/events';
 import { eraFor } from './data/eras';
 import { snapshotFor } from './data/snapshots';
 import type { RegionProps } from './lib/geo';
@@ -28,13 +28,17 @@ export default function App() {
   const [speed, setSpeed] = useState(1);
 
   const snapshot = useMemo(() => snapshotFor(year), [year]);
-  const visibleEvents = useMemo(() => eventsNear(year, eventWindow(year)), [year]);
-  const selectedEvent = useMemo(() => EVENTS.find((e) => e.id === selectedEventId) ?? null, [selectedEventId]);
+  const visibleEvents = useMemo(
+    () => eventsNear(year, eventWindow(year), selectedEventId),
+    [year, selectedEventId],
+  );
+  const selectedEvent = useMemo(() => ALL_EVENTS.find((e) => e.id === selectedEventId) ?? null, [selectedEventId]);
 
-  // Deselect an event once the timeline has moved away from it.
+  // Deselect an event once the timeline has moved away from its year.
   useEffect(() => {
-    if (selectedEventId && !visibleEvents.some((e) => e.id === selectedEventId)) setSelectedEventId(null);
-  }, [visibleEvents, selectedEventId]);
+    if (!selectedEvent) return;
+    if (Math.abs(selectedEvent.year - year) > eventWindow(year)) setSelectedEventId(null);
+  }, [year, selectedEvent]);
 
   // The region card refers to a specific snapshot; clear it when the snapshot changes.
   const lastSnapshotRef = useRef(snapshot.file);

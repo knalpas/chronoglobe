@@ -22,6 +22,6 @@ Then open the URL Vite prints (usually `http://localhost:5173`).
 ## Data
 
 - **Borders** come from [historical-basemaps](https://github.com/aourednik/historical-basemaps) (GPL-3.0): 50 snapshots from 5000 BC to 2010. The globe holds the latest snapshot at or before the selected year. Pre-modern lines are zones of influence; dashed borders are flagged as approximate by the source.
-- **Events** are a hand-curated list in `src/data/events.ts`, each with a Wikipedia article. Dates marked *c.* are approximate or debated.
+- **Events** are a hand-curated list in `src/data/events.ts` (the major layer), plus a Wikidata supplement in `src/data/wikidata-events.json`. Wikidata items need a date, coordinates, an English Wikipedia article, and enough language editions to count as notable. Dates marked *c.* are approximate or debated.
 
-Re-download borders with `npm run fetch-data -- --force`.
+Re-download borders with `npm run fetch-data -- --force`. Refresh extra events with `npm run fetch-events`.
