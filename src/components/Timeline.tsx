@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ERAS } from '../data/eras';
-import { ALL_EVENTS, CATEGORY_META, type HistoricalEvent } from '../data/events';
+import { ALL_EVENTS, CATEGORY_META, CURATED_EVENTS, type HistoricalEvent } from '../data/events';
 import { SNAPSHOT_YEARS } from '../data/snapshots';
 import {
   MAX_YEAR,
@@ -36,9 +36,99 @@ const BAND_BOTTOM = BAND_TOP + BAND_H;
 const LABEL_Y = BAND_BOTTOM + 18;
 const LENS_ZOOM = 8;
 const LENS_AXIS_Y = LENS_BOTTOM - 16;
+const CHIP_H = 17;
+const CHIP_GAP = 5;
 const LABEL_ROWS = 2;
-const LABEL_ROW_H = 14;
-const LABEL_MAX = 6;
+const LABEL_MAX = 4;
+const LABEL_MIN_PX = 58;
+const YEAR_FONT = '650 9.5px Inter, ui-sans-serif, system-ui, sans-serif';
+const TITLE_FONT = '400 10px Inter, ui-sans-serif, system-ui, sans-serif';
+const YEAR_PAD_X = 5;
+const TITLE_PAD_X = 6;
+const EDGE_APPEAR = 16;
+const EDGE_KEEP = 3;
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+function measureText(text: string, font: string): number {
+  if (!text) return 0;
+  if (!measureCtx) {
+    const canvas = document.createElement('canvas');
+    measureCtx = canvas.getContext('2d');
+  }
+  if (!measureCtx) return text.length * 6;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+
+function ellipsize(text: string, font: string, maxW: number): string {
+  if (maxW < 12) return '';
+  if (measureText(text, font) <= maxW) return text;
+  const ell = '…';
+  const ellW = measureText(ell, font);
+  if (maxW <= ellW + 4) return '';
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measureText(text.slice(0, mid) + ell, font) <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? `${text.slice(0, lo)}${ell}` : '';
+}
+
+interface ChipLayout {
+  chipX: number;
+  chipW: number;
+  yearLeft: number;
+  yearW: number;
+  title: string;
+  titleX: number;
+}
+
+function yearLabel(ev: HistoricalEvent): string {
+  return `${ev.approx ? 'c. ' : ''}${formatYearShort(ev.year)}`;
+}
+
+function chipLayouts(x: number, ev: HistoricalEvent, minX: number, maxX: number): ChipLayout[] {
+  const yearStr = yearLabel(ev);
+  const yearW = Math.ceil(measureText(yearStr, YEAR_FONT)) + YEAR_PAD_X * 2 + 1;
+  let yearLeft = x - yearW / 2;
+  if (yearLeft < minX) yearLeft = minX;
+  if (yearLeft + yearW > maxX) yearLeft = maxX - yearW;
+  if (yearLeft < minX - 0.5 || yearLeft + yearW > maxX + 0.5) return [];
+  if (x < yearLeft + 3 || x > yearLeft + yearW - 3) return [];
+
+  const out: ChipLayout[] = [];
+  const rightRoom = maxX - (yearLeft + yearW) - TITLE_PAD_X;
+  const leftRoom = yearLeft - minX - TITLE_PAD_X;
+  const rightTitle = ellipsize(ev.title, TITLE_FONT, rightRoom);
+  if (rightTitle) {
+    const titleW = Math.ceil(measureText(rightTitle, TITLE_FONT)) + 1;
+    out.push({
+      chipX: yearLeft,
+      chipW: yearW + TITLE_PAD_X + titleW + TITLE_PAD_X,
+      yearLeft,
+      yearW,
+      title: rightTitle,
+      titleX: yearLeft + yearW + TITLE_PAD_X,
+    });
+  }
+  const leftTitle = ellipsize(ev.title, TITLE_FONT, leftRoom);
+  if (leftTitle) {
+    const titleW = Math.ceil(measureText(leftTitle, TITLE_FONT)) + 1;
+    const titleX = yearLeft - TITLE_PAD_X - titleW;
+    out.push({
+      chipX: titleX - TITLE_PAD_X,
+      chipW: TITLE_PAD_X + titleW + yearW,
+      yearLeft,
+      yearW,
+      title: leftTitle,
+      titleX,
+    });
+  }
+  out.push({ chipX: yearLeft, chipW: yearW, yearLeft, yearW, title: '', titleX: yearLeft });
+  return out;
+}
 
 const MACRO_TICK_YEARS = [
   MIN_YEAR, 1 - 4000, 1 - 3000, 1 - 2000, 1 - 1500, 1 - 1000, 1 - 500, 1, 250, 500, 750, 1000, 1250, 1500, 1600, 1700,
@@ -55,6 +145,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   const [preview, setPreview] = useState<number | null>(null);
   const [dragZone, setDragZone] = useState<Zone | null>(null);
   const [pointerX, setPointerX] = useState<number | null>(null);
+  const stickyRef = useRef<Array<{ id: string; row: number }>>([]);
 
   // ── Responsive width ────────────────────────────────────────────────────
   useEffect(() => {
@@ -222,55 +313,84 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   );
 
   const lensEvents = useMemo(() => {
-    if (!lens) return [];
-    const inRange = ALL_EVENTS.filter((e) => e.year >= lens.start && e.year <= lens.end).sort(
-      (a, b) => b.importance - a.importance || (b.sitelinks ?? 0) - (a.sitelinks ?? 0) || a.year - b.year,
-    );
-    const labelPad = 6;
+    if (!lens) {
+      stickyRef.current = [];
+      return [];
+    }
+    const inset = 5;
+    const minX = lens.left + inset;
+    const maxX = lens.right - inset;
     const rows: Array<Array<{ x0: number; x1: number }>> = Array.from({ length: LABEL_ROWS }, () => []);
-    let labelsUsed = 0;
     const placed: Array<{
       ev: HistoricalEvent;
       x: number;
-      row: number | null;
-      textX: number;
-      anchor: 'start' | 'end';
-      short: string;
+      row: number;
+      chipX: number;
+      chipW: number;
+      yearLeft: number;
+      yearW: number;
+      yearStr: string;
+      title: string;
+      titleX: number;
     }> = [];
 
-    for (const ev of inRange) {
-      const x = lens.xOfLens(ev.year);
-      const raw = `${ev.approx ? 'c. ' : ''}${ev.title}`;
-      const short = raw.length > 28 ? `${raw.slice(0, 27)}…` : raw;
-      const w = 8 + Math.min(short.length, 28) * 5.4;
-      let row: number | null = null;
-      let textX = x + 5;
-      let anchor: 'start' | 'end' = 'start';
-      const canLabel = ev.importance >= 2 && labelsUsed < LABEL_MAX;
+    const rowFits = (r: number, x0: number, x1: number) =>
+      rows[r].every((o) => x1 + 14 <= o.x0 || x0 >= o.x1 + 14);
 
-      if (canLabel) {
-        const tryPlace = (a: 'start' | 'end') => {
-          const x0 = a === 'start' ? x + 5 : x - 5 - w;
-          const x1 = x0 + w;
-          if (x0 < lens.left + labelPad || x1 > lens.right - labelPad) return null;
-          for (let r = 0; r < rows.length; r++) {
-            if (rows[r].every((o) => x1 + 8 <= o.x0 || x0 >= o.x1 + 8)) {
-              return { r, x0, x1, a };
-            }
-          }
-          return null;
-        };
-        const fit = tryPlace('start') ?? tryPlace('end');
-        if (fit) {
-          row = fit.r;
-          textX = fit.a === 'start' ? fit.x0 : fit.x1;
-          anchor = fit.a;
-          rows[fit.r].push({ x0: fit.x0, x1: fit.x1 });
-          labelsUsed++;
+    const place = (ev: HistoricalEvent, x: number, preferRow: number | null, minGap: number) => {
+      if (placed.length >= LABEL_MAX) return false;
+      if (placed.some((p) => Math.abs(p.x - x) < minGap)) return false;
+      const layouts = chipLayouts(x, ev, minX, maxX);
+      const rowOrder =
+        preferRow !== null ? [preferRow, ...Array.from({ length: LABEL_ROWS }, (_, i) => i).filter((i) => i !== preferRow)] : Array.from({ length: LABEL_ROWS }, (_, i) => i);
+      for (const layout of layouts) {
+        for (const r of rowOrder) {
+          if (!rowFits(r, layout.chipX, layout.chipX + layout.chipW)) continue;
+          rows[r].push({ x0: layout.chipX, x1: layout.chipX + layout.chipW });
+          placed.push({
+            ev,
+            x,
+            row: r,
+            chipX: layout.chipX,
+            chipW: layout.chipW,
+            yearLeft: layout.yearLeft,
+            yearW: layout.yearW,
+            yearStr: yearLabel(ev),
+            title: layout.title,
+            titleX: layout.titleX,
+          });
+          return true;
         }
       }
-      placed.push({ ev, x, row, textX, anchor, short });
+      return false;
+    };
+
+    const byId = new Map(CURATED_EVENTS.map((e) => [e.id, e]));
+    const sticky = stickyRef.current
+      .map((s) => ({ ...s, ev: byId.get(s.id) }))
+      .filter((s): s is { id: string; row: number; ev: HistoricalEvent } => !!s.ev && s.ev.importance >= 2)
+      .sort((a, b) => b.ev.importance - a.ev.importance || a.ev.year - b.ev.year);
+
+    for (const { ev, row } of sticky) {
+      if (ev.year < lens.start || ev.year > lens.end) continue;
+      const x = lens.xOfLens(ev.year);
+      if (x < minX + EDGE_KEEP || x > maxX - EDGE_KEEP) continue;
+      place(ev, x, row, LABEL_MIN_PX * 0.55);
     }
+
+    const shown = new Set(placed.map((p) => p.ev.id));
+    const newcomers = CURATED_EVENTS.filter((e) => e.importance >= 2 && !shown.has(e.id)).sort(
+      (a, b) => b.importance - a.importance || a.year - b.year,
+    );
+    for (const ev of newcomers) {
+      if (placed.length >= LABEL_MAX) break;
+      if (ev.year < lens.start || ev.year > lens.end) continue;
+      const x = lens.xOfLens(ev.year);
+      if (x < minX + EDGE_APPEAR || x > maxX - EDGE_APPEAR) continue;
+      place(ev, x, null, LABEL_MIN_PX);
+    }
+
+    stickyRef.current = placed.map((p) => ({ id: p.ev.id, row: p.row }));
     return placed;
   }, [lens]);
 
@@ -414,14 +534,15 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
               return <line key={y} x1={x} x2={x} y1={LENS_TOP + 6} y2={LENS_AXIS_Y} stroke="rgba(232,224,208,0.22)" strokeDasharray="2 3" />;
             })}
             <g clipPath="url(#lensClip)">
-              {lensEvents.map(({ ev, x, row, textX, anchor, short }) => {
+              {lensEvents.map(({ ev, x, row, chipX, chipW, yearLeft, yearW, yearStr, title, titleX }) => {
                 const color = CATEGORY_META[ev.category].color;
                 const isHl = ev.id === highlightEventId;
-                const stemTop = row !== null ? LENS_TOP + 6 + row * LABEL_ROW_H : LENS_TOP + 10;
+                const chipTop = LENS_TOP + 5 + row * (CHIP_H + CHIP_GAP);
+                const clipId = `lensChipClip-${ev.id}`;
                 return (
                   <g
                     key={ev.id}
-                    className="lens-event"
+                    className={`lens-event${isHl ? ' hl' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onPickEvent?.(ev);
@@ -429,13 +550,41 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <title>{`${ev.title} (${formatYear(ev.year, { approx: ev.approx, ad: false })})`}</title>
-                    <line x1={x} x2={x} y1={stemTop} y2={LENS_AXIS_Y} stroke={color} strokeWidth={isHl ? 2 : ev.importance >= 2 ? 1.2 : 0.8} opacity={0.7} />
-                    <circle cx={x} cy={LENS_AXIS_Y} r={isHl ? 4 : ev.importance >= 2 ? 3 : 2.2} fill={color} stroke="#1b1e24" strokeWidth={1} />
-                    {row !== null && (
-                      <text x={textX} y={LENS_TOP + 16 + row * LABEL_ROW_H} textAnchor={anchor} className={`lens-event-label${isHl ? ' hl' : ''}`}>
-                        {short}
+                    <clipPath id={clipId}>
+                      <rect x={chipX + 1} y={chipTop} width={Math.max(0, chipW - 2)} height={CHIP_H} rx={2} />
+                    </clipPath>
+                    <line
+                      x1={x}
+                      x2={x}
+                      y1={chipTop}
+                      y2={LENS_AXIS_Y}
+                      stroke={color}
+                      strokeWidth={isHl ? 2 : 1.6}
+                      opacity={0.95}
+                    />
+                    <rect
+                      x={chipX}
+                      y={chipTop}
+                      width={chipW}
+                      height={CHIP_H}
+                      rx={3}
+                      className="lens-chip"
+                      fill={isHl ? 'rgba(48, 42, 30, 0.96)' : 'rgba(20, 22, 28, 0.94)'}
+                      stroke={color}
+                      strokeWidth={1.25}
+                    />
+                    <rect x={yearLeft} y={chipTop} width={yearW} height={CHIP_H} rx={3} fill={color} opacity={0.22} />
+                    <g clipPath={`url(#${clipId})`}>
+                      <text x={yearLeft + YEAR_PAD_X} y={chipTop + 12} className="lens-chip-year">
+                        {yearStr}
                       </text>
-                    )}
+                      {title ? (
+                        <text x={titleX} y={chipTop + 12} className="lens-chip-title">
+                          {title}
+                        </text>
+                      ) : null}
+                    </g>
+                    <circle cx={x} cy={LENS_AXIS_Y} r={isHl ? 4.2 : 3.2} fill={color} stroke="#1b1e24" strokeWidth={1} />
                   </g>
                 );
               })}

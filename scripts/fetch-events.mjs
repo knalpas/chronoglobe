@@ -223,6 +223,14 @@ function tidyTitle(label, wiki) {
   return raw.replace(/\s+\(\d{3,4}.*\)$/, '').replace(/\s+/g, ' ').slice(0, 90);
 }
 
+const BATTLE_TITLE = /^(battle|siege|skirmish)\b/i;
+
+function keepWikidataEvent(e) {
+  if (BATTLE_TITLE.test(e.title)) return false;
+  if (BATTLE_TITLE.test(String(e.wiki).replace(/_/g, ' '))) return false;
+  return true;
+}
+
 function qid(uri) {
   return uri.replace(/.*\/entity\//, '');
 }
@@ -286,6 +294,7 @@ async function main() {
 
   const events = [...byWiki.values()]
     .map(({ _class, ...rest }) => rest)
+    .filter(keepWikidataEvent)
     .sort((a, b) => a.year - b.year || b.sitelinks - a.sitelinks);
   await writeFile(OUT, `${JSON.stringify(events, null, 2)}\n`);
   console.log(`\n✓ ${events.length} extra events → ${OUT}`);

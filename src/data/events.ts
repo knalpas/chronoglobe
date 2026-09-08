@@ -743,7 +743,16 @@ EVENTS.sort((a, b) => a.year - b.year || b.importance - a.importance);
 /** Hand-curated major events — used for [ ] / event-skip navigation. */
 export const CURATED_EVENTS = EVENTS;
 
-const EXTRA = (wikidataEvents as HistoricalEvent[]).map((e) => ({
+/** Routine battles/sieges drown the timeline; the curated list already has the map-changing ones. */
+const BATTLE_TITLE = /^(battle|siege|skirmish)\b/i;
+
+function keepWikidataExtra(e: HistoricalEvent): boolean {
+  if (BATTLE_TITLE.test(e.title)) return false;
+  if (BATTLE_TITLE.test(e.wiki.replace(/_/g, ' '))) return false;
+  return true;
+}
+
+const EXTRA = (wikidataEvents as HistoricalEvent[]).filter(keepWikidataExtra).map((e) => ({
   ...e,
   source: 'wikidata' as const,
   importance: 1 as const,
@@ -764,8 +773,11 @@ export function eventsNear(year: number, window: number, keepId?: string | null)
     .filter((e) => e.source === 'wikidata')
     .sort((a, b) => (b.sitelinks ?? 0) - (a.sitelinks ?? 0));
   const kept = keepId ? extra.find((e) => e.id === keepId) : undefined;
-  const capped = extra.filter((e) => e.id !== keepId).slice(0, PANEL_EXTRA_CAP);
-  if (kept) capped.unshift(kept);
+  const rest = extra.filter((e) => e.id !== keepId);
+  const nonWar = rest.filter((e) => e.category !== 'war');
+  const war = rest.filter((e) => e.category === 'war');
+  const capped = [...nonWar, ...war.slice(0, 2)].slice(0, PANEL_EXTRA_CAP);
+  if (kept && !capped.some((e) => e.id === kept.id)) capped.unshift(kept);
   return [...curated, ...capped].sort((a, b) => b.importance - a.importance || a.year - b.year);
 }
 

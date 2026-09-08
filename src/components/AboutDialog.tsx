@@ -68,7 +68,8 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
             turning points, each with a short briefing. A further {ALL_EVENTS.length - CURATED_EVENTS.length} events
             come from <a href="https://www.wikidata.org/" target="_blank" rel="noreferrer">Wikidata</a> (CC0), filtered
             to items that have a date, coordinates, an English Wikipedia article, and enough language editions to be
-            notable. Those extras appear as smaller ticks and are labelled only when there is room. Dates marked
+            notable. Individual battles and sieges are omitted from that layer (they already sit on the curated list
+            when they changed the map). Hover the timeline to read major events on a dated bar. Dates marked
             <i> c.</i> are approximate, traditional or debated. Refresh the Wikidata layer with{' '}
             <code>npm run fetch-events</code>.
           </p>

@@ -671,22 +671,28 @@ a:hover {
   fill: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
-.lens-event-label {
+.lens-chip {
+  pointer-events: all;
+}
+.lens-chip-year {
+  font-size: 9.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink-muted);
+}
+.lens-chip-title {
   font-size: 10px;
   fill: var(--ink);
-  paint-order: stroke;
-  stroke: rgba(24, 27, 33, 0.85);
-  stroke-width: 3px;
-}
-.lens-event-label.hl {
-  fill: var(--accent);
-  font-weight: 600;
 }
 .lens-event {
   cursor: pointer;
   pointer-events: all;
 }
-.lens-event:hover text {
+.lens-event:hover .lens-chip {
+  fill: rgba(48, 42, 30, 0.96);
+}
+.lens-event:hover .lens-chip-title,
+.lens-event.hl .lens-chip-title {
   fill: var(--accent);
 }
 .lens-preview-label {
