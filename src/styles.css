@@ -67,7 +67,10 @@ a:hover {
 
 .globe-shell {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--timeline-h) + var(--gutter) * 2);
   z-index: 0;
 }
 .globe-shell .globe,
@@ -109,7 +112,7 @@ a:hover {
   filter: invert(0.9) sepia(0.2);
 }
 .maplibregl-ctrl-bottom-left {
-  bottom: calc(var(--timeline-h) + var(--gutter) * 2 - 6px) !important;
+  bottom: 8px !important;
   left: var(--gutter) !important;
 }
 .maplibregl-ctrl-attrib {
