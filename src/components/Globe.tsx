@@ -50,18 +50,20 @@ const OCEAN = '#b9ccd3';
 const BORDER = '#4d3f30';
 const EMPTY_FC: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+/** Shift the sphere into the open frame (between header, panel, and date bar). */
+const GLOBE_OFFSET = { left: 200, zoom: 1.82 };
+
 function readCssPx(name: string): number {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 }
 
-/** Keep the sphere optically centered in the open frame; the canvas still draws under the dock. */
 function chromePadding(panelCollapsed: boolean) {
   const gutter = readCssPx('--gutter');
   const panelGone = panelCollapsed || window.innerWidth <= 700;
   return {
     top: readCssPx('--header-h') + gutter,
-    bottom: gutter * 2,
-    left: panelGone ? gutter : 200,
+    bottom: readCssPx('--timeline-h') + gutter * 2,
+    left: panelGone ? gutter : GLOBE_OFFSET.left,
     right: panelGone ? gutter : readCssPx('--panel-w') + gutter * 2,
   };
 }
@@ -356,7 +358,7 @@ export default function Globe({
       container,
       style: buildStyle(),
       center: [20, 25],
-      zoom: 1.55,
+      zoom: GLOBE_OFFSET.zoom,
       minZoom: 0.8,
       maxZoom: 8,
       attributionControl: false,
