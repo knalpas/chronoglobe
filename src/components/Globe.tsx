@@ -60,7 +60,7 @@ function chromePadding(panelCollapsed: boolean) {
   const panelGone = panelCollapsed || window.innerWidth <= 700;
   return {
     top: readCssPx('--header-h') + gutter,
-    bottom: readCssPx('--timeline-h') + gutter * 2,
+    bottom: gutter * 2,
     left: panelGone ? gutter : 200,
     right: panelGone ? gutter : readCssPx('--panel-w') + gutter * 2,
   };

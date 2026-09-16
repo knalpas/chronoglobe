@@ -84,15 +84,15 @@ a:hover {
   left: 0;
   right: calc(var(--panel-w) + var(--gutter) * 2);
   bottom: 0;
-  height: calc(var(--timeline-h) + var(--gutter) * 3);
+  height: calc(var(--timeline-h) + var(--gutter) * 2);
   pointer-events: none;
   z-index: 1;
   background: linear-gradient(
     to bottom,
     rgb(7 10 15 / 0) 0%,
-    rgb(7 10 15 / 0.18) 38%,
-    rgb(7 10 15 / 0.7) 76%,
-    rgb(9 12 18 / 0.96) 100%
+    rgb(7 10 15 / 0.22) 28%,
+    rgb(7 10 15 / 0.5) 62%,
+    rgb(7 10 15 / 0.78) 100%
   );
 }
 .app.panel-min .globe-fade {
