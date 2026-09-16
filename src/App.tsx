@@ -166,6 +166,7 @@ export default function App() {
         onRegionCount={onRegionCount}
       />
       <div className="vignette" aria-hidden />
+      <div className="globe-fade" aria-hidden />
 
       <Header layers={layers} onToggleLayer={toggleLayer} onAbout={() => setAboutOpen(true)} />
 

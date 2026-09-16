@@ -50,6 +50,22 @@ const OCEAN = '#b9ccd3';
 const BORDER = '#4d3f30';
 const EMPTY_FC: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+function readCssPx(name: string): number {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+}
+
+/** Keep the sphere optically centered in the open frame; the canvas still draws under the dock. */
+function chromePadding(panelCollapsed: boolean) {
+  const gutter = readCssPx('--gutter');
+  const panelGone = panelCollapsed || window.innerWidth <= 700;
+  return {
+    top: readCssPx('--header-h') + gutter,
+    bottom: readCssPx('--timeline-h') + gutter * 2,
+    left: panelGone ? gutter : 200,
+    right: panelGone ? gutter : readCssPx('--panel-w') + gutter * 2,
+  };
+}
+
 const snapshotCache = new Map<string, Promise<PreparedSnapshot>>();
 function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
   let p = snapshotCache.get(s.file);
@@ -325,6 +341,8 @@ export default function Globe({
   const hoveredRef = useRef<number | null>(null);
   const popupRef = useRef<Popup | null>(null);
   const regionsRef = useRef<Map<number, RegionProps>>(new Map());
+  const panelCollapsedRef = useRef(panelCollapsed);
+  panelCollapsedRef.current = panelCollapsed;
 
   const cbRef = useRef({ onSelectRegion, onSelectEvent });
   cbRef.current = { onSelectRegion, onSelectEvent };
@@ -345,6 +363,7 @@ export default function Globe({
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    map.setPadding(chromePadding(panelCollapsedRef.current));
     let cancelled = false;
 
     map.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
@@ -456,7 +475,10 @@ export default function Globe({
     map.on('mouseout', onLeave);
     map.on('click', onClick);
 
-    const ro = new ResizeObserver(() => map.resize());
+    const ro = new ResizeObserver(() => {
+      map.setPadding(chromePadding(panelCollapsedRef.current));
+      map.resize();
+    });
     ro.observe(shell);
 
     return () => {
@@ -472,14 +494,7 @@ export default function Globe({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    // Horizontal only. Vertical placement is the CSS frame (header → timeline),
-    // so padding cannot drag the sphere into the date bar.
-    map.setPadding({
-      top: 0,
-      bottom: 0,
-      right: 8,
-      left: panelCollapsed ? 8 : 200,
-    });
+    map.setPadding(chromePadding(panelCollapsed));
   }, [panelCollapsed, ready]);
 
   useEffect(() => {
