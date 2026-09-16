@@ -2,6 +2,8 @@
 
 An interactive globe of political history from 5000 BC to the present. Drag the timeline to any year, see the frontiers of that moment, and open events and states for a short briefing.
 
+**Live:** [knalpas.github.io/chronoglobe](https://knalpas.github.io/chronoglobe/)
+
 ## Run
 
 ```bash
