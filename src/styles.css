@@ -69,9 +69,13 @@ a:hover {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  right: calc(var(--panel-w) + var(--gutter) * 2);
   bottom: calc(var(--timeline-h) + var(--gutter) * 2);
+  overflow: hidden;
   z-index: 0;
+}
+.app.panel-min .globe-shell {
+  right: 0;
 }
 .globe-shell .globe,
 .globe-shell .maplibregl-map {
@@ -91,7 +95,7 @@ a:hover {
 /* MapLibre chrome */
 .maplibregl-ctrl-top-right {
   top: 76px !important;
-  right: calc(var(--panel-w) + var(--gutter) * 2) !important;
+  right: 8px !important;
 }
 .maplibregl-ctrl-group {
   background: var(--glass) !important;
@@ -807,6 +811,9 @@ a:hover {
   }
   .header {
     right: var(--gutter);
+  }
+  .globe-shell {
+    right: 0;
   }
   .maplibregl-ctrl-top-right {
     right: var(--gutter) !important;

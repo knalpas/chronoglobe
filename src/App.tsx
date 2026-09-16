@@ -150,7 +150,7 @@ export default function App() {
   const nextEv = nextEventYear(year);
 
   return (
-    <div className="app">
+    <div className={`app${panelCollapsed ? ' panel-min' : ''}`}>
       <Globe
         year={year}
         snapshot={snapshot}

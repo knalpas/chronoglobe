@@ -382,6 +382,7 @@ export default function Globe({
     };
 
     map.on('load', markReady);
+    map.on('style.load', markReady);
     map.on('error', (e) => console.error('[maplibre]', e.error ?? e));
 
     const setHover = (fid: number | null) => {
