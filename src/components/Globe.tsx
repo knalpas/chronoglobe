@@ -38,6 +38,7 @@ interface GlobeProps {
   selectedRegionFid: number | null;
   layers: LayerToggles;
   flyTarget: FlyTarget | null;
+  panelCollapsed?: boolean;
   onSelectRegion: (props: RegionProps | null) => void;
   onSelectEvent: (id: string | null) => void;
   onLoadingChange: (loading: boolean) => void;
@@ -311,6 +312,7 @@ export default function Globe({
   selectedRegionFid,
   layers,
   flyTarget,
+  panelCollapsed = false,
   onSelectRegion,
   onSelectEvent,
   onLoadingChange,
@@ -466,6 +468,18 @@ export default function Globe({
       setReady(false);
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    // Keep the sphere in the visible gap beside the panel, but not glued to the left edge.
+    map.setPadding({
+      top: 0,
+      bottom: 0,
+      right: 8,
+      left: panelCollapsed ? 8 : 200,
+    });
+  }, [panelCollapsed, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -159,6 +159,7 @@ export default function App() {
         selectedRegionFid={selectedRegion?.fid ?? null}
         layers={layers}
         flyTarget={flyTarget}
+        panelCollapsed={panelCollapsed}
         onSelectRegion={onSelectRegion}
         onSelectEvent={onSelectEventFromMap}
         onLoadingChange={onLoadingChange}
