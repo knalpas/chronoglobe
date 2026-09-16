@@ -13,7 +13,10 @@
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --panel-w: 380px;
   --timeline-h: 206px;
+  --header-h: 64px;
   --gutter: 16px;
+  --dock-clearance: calc(var(--timeline-h) + var(--gutter) * 2);
+  --header-clearance: calc(var(--header-h) + var(--gutter));
   color-scheme: dark;
 }
 
@@ -67,20 +70,23 @@ a:hover {
 
 .globe-shell {
   position: absolute;
-  top: 0;
+  top: var(--header-clearance);
   left: 0;
   right: calc(var(--panel-w) + var(--gutter) * 2);
-  bottom: calc(var(--timeline-h) + var(--gutter) * 2);
+  bottom: var(--dock-clearance);
   overflow: hidden;
+  contain: paint;
   z-index: 0;
 }
 .app.panel-min .globe-shell {
   right: 0;
 }
 .globe-shell .globe,
-.globe-shell .maplibregl-map {
+.globe-shell .maplibregl-map,
+.globe-shell .maplibregl-canvas-container {
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .vignette {
@@ -94,7 +100,7 @@ a:hover {
 
 /* MapLibre chrome */
 .maplibregl-ctrl-top-right {
-  top: 76px !important;
+  top: 8px !important;
   right: 8px !important;
 }
 .maplibregl-ctrl-group {
@@ -329,7 +335,7 @@ a:hover {
   position: absolute;
   top: var(--gutter);
   right: var(--gutter);
-  bottom: calc(var(--timeline-h) + var(--gutter) * 2);
+  bottom: var(--dock-clearance);
   width: var(--panel-w);
   display: flex;
   flex-direction: column;

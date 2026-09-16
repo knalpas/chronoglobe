@@ -472,10 +472,11 @@ export default function Globe({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    // Offset the sphere into the open area: right of the left edge, below the header.
+    // Horizontal only. Vertical placement is the CSS frame (header → timeline),
+    // so padding cannot drag the sphere into the date bar.
     map.setPadding({
-      top: 168,
-      bottom: 8,
+      top: 0,
+      bottom: 0,
       right: 8,
       left: panelCollapsed ? 8 : 200,
     });
