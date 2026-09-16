@@ -472,10 +472,10 @@ export default function Globe({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    // Keep the sphere in the visible gap beside the panel, but not glued to the left edge.
+    // Offset the sphere into the open area: right of the left edge, below the header.
     map.setPadding({
-      top: 0,
-      bottom: 0,
+      top: 168,
+      bottom: 8,
       right: 8,
       left: panelCollapsed ? 8 : 200,
     });
