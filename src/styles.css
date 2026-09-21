@@ -841,6 +841,7 @@ a:hover {
     left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
     right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
     gap: 8px;
+    min-width: 0;
   }
   .brand {
     padding: 6px 10px 6px 8px;
@@ -904,7 +905,7 @@ a:hover {
   }
   .tl-group {
     gap: 6px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   .seg-btn {
     padding: 6px 8px;
