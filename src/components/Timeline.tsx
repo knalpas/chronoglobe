@@ -164,7 +164,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   const yearAt = useCallback((x: number) => clampYear(fractionToYear((x - PAD_L) / trackW)), [trackW]);
 
   // ── Lens geometry ───────────────────────────────────────────────────────
-  const lensW = Math.min(440, Math.max(260, trackW * 0.36));
+  const lensW = Math.min(440, Math.max(Math.min(260, trackW * 0.78), trackW * 0.36));
   const lens = useMemo(() => {
     if (lensCenter === null) return null;
     const yearsPerPx = yearsPerFraction(lensCenter) / trackW;

@@ -36,7 +36,7 @@ export default function Header({ layers, onToggleLayer, onAbout }: HeaderProps) 
           </button>
         </div>
         <button className="toggle" onClick={onAbout}>
-          About &amp; sources
+          About<span className="hide-narrow"> &amp; sources</span>
         </button>
       </div>
     </header>

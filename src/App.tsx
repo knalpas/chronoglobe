@@ -22,7 +22,9 @@ export default function App() {
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [loading, setLoading] = useState(false);
   const [polityCount, setPolityCount] = useState(0);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches,
+  );
   const [aboutOpen, setAboutOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -63,6 +65,7 @@ export default function App() {
     (ev: HistoricalEvent) => {
       goToYear(ev.year);
       selectEvent(ev, true);
+      if (window.matchMedia('(max-width: 700px)').matches) setPanelCollapsed(false);
     },
     [goToYear, selectEvent],
   );
@@ -135,13 +138,22 @@ export default function App() {
   const toggleLayer = (key: keyof LayerToggles) => setLayers((l) => ({ ...l, [key]: !l[key] }));
   const onLoadingChange = useCallback((v: boolean) => setLoading(v), []);
   const onRegionCount = useCallback((n: number) => setPolityCount(n), []);
+  const openMobilePanel = () => {
+    if (window.matchMedia('(max-width: 700px)').matches) setPanelCollapsed(false);
+  };
   const onSelectRegion = useCallback((p: RegionProps | null) => {
     setSelectedRegion(p);
-    if (p) setSelectedEventId(null);
+    if (p) {
+      setSelectedEventId(null);
+      openMobilePanel();
+    }
   }, []);
   const onSelectEventFromMap = useCallback((id: string | null) => {
     setSelectedEventId(id);
-    if (id) setSelectedRegion(null);
+    if (id) {
+      setSelectedRegion(null);
+      openMobilePanel();
+    }
   }, []);
 
   const shownYear = previewYear ?? year;
@@ -209,10 +221,10 @@ export default function App() {
             </div>
             <div className="seg" role="group" aria-label="Jump between events">
               <button className="seg-btn" disabled={prevEv === null} onClick={() => prevEv !== null && goToYear(prevEv)} title="Previous event ([)">
-                ‹ event
+                ‹<span className="hide-narrow"> event</span>
               </button>
               <button className="seg-btn" disabled={nextEv === null} onClick={() => nextEv !== null && goToYear(nextEv)} title="Next event (])">
-                event ›
+                <span className="hide-narrow">event </span>›
               </button>
             </div>
           </div>

@@ -57,12 +57,17 @@ function readCssPx(name: string): number {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 }
 
+function isPhone() {
+  return window.matchMedia('(max-width: 700px)').matches;
+}
+
 function chromePadding(panelCollapsed: boolean) {
   const gutter = readCssPx('--gutter');
-  const panelGone = panelCollapsed || window.innerWidth <= 700;
+  const phone = isPhone();
+  const panelGone = panelCollapsed || phone;
   return {
-    top: readCssPx('--header-h') + gutter,
-    bottom: readCssPx('--timeline-h') + gutter * 2,
+    top: readCssPx('--header-h') + gutter + (phone ? 8 : 0),
+    bottom: readCssPx('--timeline-h') + gutter * 2 + (phone ? 24 : 0),
     left: panelGone ? gutter : GLOBE_OFFSET.left,
     right: panelGone ? gutter : readCssPx('--panel-w') + gutter * 2,
   };
@@ -358,7 +363,7 @@ export default function Globe({
       container,
       style: buildStyle(),
       center: [20, 25],
-      zoom: GLOBE_OFFSET.zoom,
+      zoom: isPhone() ? 1.35 : GLOBE_OFFSET.zoom,
       minZoom: 0.8,
       maxZoom: 8,
       attributionControl: false,
