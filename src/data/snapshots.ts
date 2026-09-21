@@ -279,9 +279,22 @@ export function snapshotIndexFor(year: number): number {
   return idx;
 }
 
+function nearestEditorial(year: number): string {
+  let best = SNAPSHOTS[0];
+  let bestDist = Infinity;
+  for (const s of SNAPSHOTS) {
+    const d = Math.abs(s.year - year);
+    if (d < bestDist) {
+      best = s;
+      bestDist = d;
+    }
+  }
+  return best.summary;
+}
+
 function cshapesSummary(year: number): string {
   const mapYear = cshapesMapYear(year);
-  const editorial = SNAPSHOTS[snapshotIndexFor(mapYear)]?.summary ?? '';
+  const editorial = nearestEditorial(mapYear);
   const held =
     year > CSHAPES_END
       ? ` CShapes 2.0 ends in ${CSHAPES_END}; later changes are held at that map and noted in the event list.`
