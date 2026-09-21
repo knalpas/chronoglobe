@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import type { LayerToggles } from './Globe';
 
 interface HeaderProps {
   layers: LayerToggles;
   onToggleLayer: (key: keyof LayerToggles) => void;
   onAbout: () => void;
+  onCopyLink?: () => void;
 }
 
-export default function Header({ layers, onToggleLayer, onAbout }: HeaderProps) {
+export default function Header({ layers, onToggleLayer, onAbout, onCopyLink }: HeaderProps) {
+  const [copied, setCopied] = useState(false);
   return (
     <header className="header">
       <div className="brand">
@@ -35,6 +38,19 @@ export default function Header({ layers, onToggleLayer, onAbout }: HeaderProps) 
             Grid
           </button>
         </div>
+        {onCopyLink && (
+          <button
+            className="toggle"
+            onClick={() => {
+              onCopyLink();
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1600);
+            }}
+            title="Copy a link to this year"
+          >
+            {copied ? 'Copied' : 'Link'}
+          </button>
+        )}
         <button className="toggle" onClick={onAbout}>
           About<span className="hide-narrow"> &amp; sources</span>
         </button>

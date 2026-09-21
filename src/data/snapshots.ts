@@ -1,4 +1,5 @@
-import { BC } from '../lib/time';
+import { CSHAPES_END, CSHAPES_START, cshapesMapYear, nextCshapesChange, usesCshapes } from './cshapes';
+import { BC, formatYear } from '../lib/time';
 
 /**
  * One entry per border snapshot in the historical-basemaps dataset.
@@ -10,6 +11,7 @@ export interface Snapshot {
   file: string;
   year: number;
   summary: string;
+  source?: 'basemaps' | 'cshapes';
 }
 
 export const SNAPSHOTS: Snapshot[] = [
@@ -261,13 +263,13 @@ export const SNAPSHOTS: Snapshot[] = [
   {
     file: '2010', year: 2010,
     summary:
-      'The global financial crisis has shaken Western economies; China is now the world\u2019s second-largest. Kosovo has declared independence and South Sudan is about to. In December, protests in Tunisia set off the Arab Spring. This is the most recent border snapshot in the dataset — later changes (Crimea 2014, South Sudan 2011, etc.) are noted in the event list.',
+      'The global financial crisis has shaken Western economies; China is now the world\u2019s second-largest. Kosovo has declared independence and South Sudan is about to. In December, protests in Tunisia set off the Arab Spring.',
   },
 ];
 
 export const SNAPSHOT_YEARS = SNAPSHOTS.map((s) => s.year);
 
-/** Index of the latest snapshot whose year is <= the given year. */
+/** Index of the latest historical-basemaps snapshot whose year is <= the given year. */
 export function snapshotIndexFor(year: number): number {
   let idx = 0;
   for (let i = 0; i < SNAPSHOTS.length; i++) {
@@ -277,10 +279,39 @@ export function snapshotIndexFor(year: number): number {
   return idx;
 }
 
+function cshapesSummary(year: number): string {
+  const mapYear = cshapesMapYear(year);
+  const editorial = SNAPSHOTS[snapshotIndexFor(mapYear)]?.summary ?? '';
+  const held =
+    year > CSHAPES_END
+      ? ` CShapes 2.0 ends in ${CSHAPES_END}; later changes are held at that map and noted in the event list.`
+      : '';
+  return `Borders for ${formatYear(mapYear)} from CShapes 2.0 (independent states and dependent territories as of 31 December).${held} ${editorial}`;
+}
+
 export function snapshotFor(year: number): Snapshot {
-  return SNAPSHOTS[snapshotIndexFor(year)];
+  if (usesCshapes(year)) {
+    const mapYear = cshapesMapYear(year);
+    return {
+      file: 'cshapes',
+      year: mapYear,
+      source: 'cshapes',
+      summary: cshapesSummary(year),
+    };
+  }
+  return { ...SNAPSHOTS[snapshotIndexFor(year)], source: 'basemaps' };
+}
+
+export function nextBorderYear(year: number): number | null {
+  if (usesCshapes(year)) return nextCshapesChange(year);
+  const idx = snapshotIndexFor(year);
+  const next = SNAPSHOTS[idx + 1];
+  if (!next) return CSHAPES_START;
+  if (next.year >= CSHAPES_START) return CSHAPES_START;
+  return next.year;
 }
 
 export function snapshotUrl(s: Snapshot): string {
+  if (s.source === 'cshapes') return `${import.meta.env.BASE_URL}data/borders/cshapes.geojson`;
   return `${import.meta.env.BASE_URL}data/borders/world_${s.file}.geojson`;
 }

@@ -29,6 +29,8 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
           <p>
             Chronoglobe shows the political map of the world at any year from 5000 BC to today. Drag the timeline, hover
             it to open a magnifying lens for year-by-year precision, and click any state or event marker for details.
+            The address bar updates as you move; add <code>?year=1492</code> or <code>?year=44bc</code> to open a year
+            directly, or use the Link button to copy it.
           </p>
 
           <h3>How to navigate</h3>
@@ -51,9 +53,13 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
               historical-basemaps
             </a>{' '}
             project by André Ourednik and contributors (GPL-3.0), which provides {SNAPSHOTS.length} snapshots between 5000 BC
-            and 2010. The globe shows the latest snapshot at or before the selected year, so between snapshots the map is
-            held constant — the side panel always states which snapshot year is displayed. Granularity is coarser in the
-            deep past (every 1,000 years before 1500 BC, every century in antiquity, then every few decades).
+            and 1880. From 1886 the globe switches to{' '}
+            <a href="https://icr.ethz.ch/data/cshapes/" target="_blank" rel="noreferrer">
+              CShapes 2.0
+            </a>{' '}
+            (Schvitz et al. 2022), a coded GIS of independent states and dependencies through 2019, so modern borders can
+            change year by year. The side panel always states which year the polygons represent. Before 1886 the map is
+            held at the latest historical-basemaps snapshot.
           </p>
           <p>
             Colours follow the ruling power (colonies share their metropole’s hue). <b>Dashed</b> borders are flagged as

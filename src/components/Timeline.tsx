@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ERAS } from '../data/eras';
 import { ALL_EVENTS, CATEGORY_META, CURATED_EVENTS, type HistoricalEvent } from '../data/events';
+import { CSHAPES_CHANGE_YEARS, CSHAPES_START } from '../data/cshapes';
 import { SNAPSHOT_YEARS } from '../data/snapshots';
 import {
   MAX_YEAR,
@@ -45,6 +46,8 @@ const YEAR_FONT = '650 9.5px Inter, ui-sans-serif, system-ui, sans-serif';
 const TITLE_FONT = '400 10px Inter, ui-sans-serif, system-ui, sans-serif';
 const YEAR_PAD_X = 5;
 const TITLE_PAD_X = 6;
+const BORDER_TICK_YEARS = [...SNAPSHOT_YEARS.filter((y) => y < CSHAPES_START), ...CSHAPES_CHANGE_YEARS];
+
 const EDGE_APPEAR = 16;
 const EDGE_KEEP = 3;
 
@@ -479,7 +482,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
 
         {/* Snapshot markers (where the border data changes) */}
         <g className="snapshot-ticks">
-          {SNAPSHOT_YEARS.map((y) => {
+          {BORDER_TICK_YEARS.map((y) => {
             const x = xOf(y);
             return <path key={y} d={`M${x - 3} ${BAND_BOTTOM + 7} L${x} ${BAND_BOTTOM + 2} L${x + 3} ${BAND_BOTTOM + 7} Z`} fill="rgba(232,224,208,0.55)" />;
           })}
@@ -529,7 +532,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
                 </text>
               </g>
             ))}
-            {SNAPSHOT_YEARS.filter((y) => y >= lens.start && y <= lens.end).map((y) => {
+            {BORDER_TICK_YEARS.filter((y) => y >= lens.start && y <= lens.end).map((y) => {
               const x = lens.xOfLens(y);
               return <line key={y} x1={x} x2={x} y1={LENS_TOP + 6} y2={LENS_AXIS_Y} stroke="rgba(232,224,208,0.22)" strokeDasharray="2 3" />;
             })}

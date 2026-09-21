@@ -1,6 +1,6 @@
 import { CATEGORY_META, nextEventYear, prevEventYear, type HistoricalEvent } from '../data/events';
 import { eraFor } from '../data/eras';
-import { SNAPSHOTS, snapshotIndexFor, type Snapshot } from '../data/snapshots';
+import { nextBorderYear, type Snapshot } from '../data/snapshots';
 import type { RegionProps } from '../lib/geo';
 import { eventWindow, formatYear } from '../lib/time';
 
@@ -50,8 +50,7 @@ export default function SummaryPanel({
   onGoToYear,
 }: SummaryPanelProps) {
   const era = eraFor(year);
-  const idx = snapshotIndexFor(year);
-  const next = SNAPSHOTS[idx + 1];
+  const next = nextBorderYear(year);
   const window = eventWindow(year);
   const exact = visibleEvents.filter((e) => e.year === year);
   const nearby = visibleEvents.filter((e) => e.year !== year);
@@ -85,7 +84,8 @@ export default function SummaryPanel({
         <section className="panel-section">
           <div className="section-kicker">
             Borders as of {formatYear(snapshot.year)}
-            {next && <span className="muted"> · next change {formatYear(next.year)}</span>}
+            {snapshot.source === 'cshapes' && <span className="muted"> · CShapes 2.0</span>}
+            {next !== null && <span className="muted"> · next change {formatYear(next)}</span>}
             {loading && <span className="loading-dot" aria-label="loading" />}
           </div>
           <p className="panel-text">{snapshot.summary}</p>
@@ -93,7 +93,9 @@ export default function SummaryPanel({
             <span className="stat">
               <b>{polityCount}</b> states &amp; polities mapped
             </span>
-            <span className="stat muted">Hatched areas are cultural regions, not states</span>
+            {snapshot.source !== 'cshapes' && (
+              <span className="stat muted">Hatched areas are cultural regions, not states</span>
+            )}
           </div>
         </section>
 

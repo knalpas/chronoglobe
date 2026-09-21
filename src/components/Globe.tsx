@@ -13,6 +13,7 @@ import {
 } from 'maplibre-gl';
 import type { FeatureCollection, Point } from 'geojson';
 import { CATEGORY_META, type HistoricalEvent } from '../data/events';
+import { loadCshapesYear } from '../data/cshapes';
 import { snapshotUrl, type Snapshot } from '../data/snapshots';
 import { graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
 import { formatYear } from '../lib/time';
@@ -75,6 +76,7 @@ function chromePadding(panelCollapsed: boolean) {
 
 const snapshotCache = new Map<string, Promise<PreparedSnapshot>>();
 function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
+  if (s.source === 'cshapes') return loadCshapesYear(s.year);
   let p = snapshotCache.get(s.file);
   if (!p) {
     p = fetch(snapshotUrl(s))
@@ -378,7 +380,7 @@ export default function Globe({
       new AttributionControl({
         compact: true,
         customAttribution:
-          'Borders: <a href="https://github.com/aourednik/historical-basemaps" target="_blank" rel="noreferrer">historical-basemaps</a> (GPL-3.0) · Rendered with MapLibre',
+          'Borders: <a href="https://github.com/aourednik/historical-basemaps" target="_blank" rel="noreferrer">historical-basemaps</a> (to 1885) · <a href="https://icr.ethz.ch/data/cshapes/" target="_blank" rel="noreferrer">CShapes 2.0</a> (1886–2019) · MapLibre',
       }),
       'bottom-left',
     );

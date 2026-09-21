@@ -8,13 +8,14 @@ import { ALL_EVENTS, eventsNear, nextEventYear, prevEventYear, type HistoricalEv
 import { eraFor } from './data/eras';
 import { snapshotFor } from './data/snapshots';
 import type { RegionProps } from './lib/geo';
+import { yearFromLocation, writeYearToLocation } from './lib/permalink';
 import { MAX_YEAR, clampYear, eventWindow, formatYear, yearsPerFraction } from './lib/time';
 
 const SPEEDS = [0.5, 1, 2, 4];
 const PLAY_PX_PER_SEC = 28; // constant on-screen speed → faster through sparse millennia
 
 export default function App() {
-  const [year, setYear] = useState(1492);
+  const [year, setYear] = useState(() => yearFromLocation() ?? 1492);
   const [previewYear, setPreviewYear] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<RegionProps | null>(null);
@@ -43,10 +44,11 @@ export default function App() {
   }, [year, selectedEvent]);
 
   // The region card refers to a specific snapshot; clear it when the snapshot changes.
-  const lastSnapshotRef = useRef(snapshot.file);
+  const lastSnapshotRef = useRef(`${snapshot.file}:${snapshot.year}`);
   useEffect(() => {
-    if (lastSnapshotRef.current !== snapshot.file) {
-      lastSnapshotRef.current = snapshot.file;
+    const key = `${snapshot.file}:${snapshot.year}`;
+    if (lastSnapshotRef.current !== key) {
+      lastSnapshotRef.current = key;
       setSelectedRegion(null);
     }
   }, [snapshot]);
@@ -54,6 +56,27 @@ export default function App() {
   const goToYear = useCallback((y: number) => {
     setPlaying(false);
     setYear(clampYear(y));
+  }, []);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => writeYearToLocation(year), playing ? 400 : 80);
+    return () => window.clearTimeout(t);
+  }, [year, playing]);
+
+  useEffect(() => {
+    const onNav = () => {
+      const y = yearFromLocation();
+      if (y !== null) {
+        setPlaying(false);
+        setYear(y);
+      }
+    };
+    window.addEventListener('popstate', onNav);
+    window.addEventListener('hashchange', onNav);
+    return () => {
+      window.removeEventListener('popstate', onNav);
+      window.removeEventListener('hashchange', onNav);
+    };
   }, []);
 
   const selectEvent = useCallback((ev: HistoricalEvent | null, fly = false) => {
@@ -180,7 +203,16 @@ export default function App() {
       <div className="vignette" aria-hidden />
       <div className="globe-fade" aria-hidden />
 
-      <Header layers={layers} onToggleLayer={toggleLayer} onAbout={() => setAboutOpen(true)} />
+      <Header
+        layers={layers}
+        onToggleLayer={toggleLayer}
+        onAbout={() => setAboutOpen(true)}
+        onCopyLink={() => {
+          writeYearToLocation(year);
+          const url = window.location.href;
+          if (navigator.clipboard?.writeText) void navigator.clipboard.writeText(url);
+        }}
+      />
 
       <SummaryPanel
         year={year}

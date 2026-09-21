@@ -96,7 +96,10 @@ const ALIASES: Record<string, string> = {
   'Great Britain': 'United Kingdom',
   'Spanish Habsburg': 'Spain',
   USA: 'United States',
+  'United States of America': 'United States',
   'Soviet Union': 'USSR',
+  'Russia (Soviet Union)': 'USSR',
+  'United Kingdom of Great Britain and Northern Ireland': 'United Kingdom',
 };
 
 function hashString(s: string): number {
