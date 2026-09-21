@@ -393,6 +393,14 @@ export default function Globe({
       }),
       'bottom-left',
     );
+    const foldAttrib = () => {
+      const el = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+      if (!el) return;
+      el.classList.remove('maplibregl-compact-show');
+      el.removeAttribute('open');
+    };
+    queueMicrotask(foldAttrib);
+    map.once('idle', foldAttrib);
 
     const popup = new Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'cg-popup' });
     popupRef.current = popup;
