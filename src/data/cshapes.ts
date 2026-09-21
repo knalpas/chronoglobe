@@ -16,10 +16,11 @@ export function usesCshapes(year: number): boolean {
   return year >= CSHAPES_START;
 }
 
-/** True if the unit exists on 31 December of `year`. */
-export function cshapesActiveOnDec31(start: number, end: number, year: number): boolean {
-  const dec31 = year * 10000 + 1231;
-  return start <= dec31 && dec31 <= end;
+/** True if the unit’s interval overlaps calendar year `year`. */
+export function cshapesOverlapsYear(start: number, end: number, year: number): boolean {
+  const yStart = year * 10000 + 101;
+  const yEnd = year * 10000 + 1231;
+  return start <= yEnd && end >= yStart;
 }
 
 export function nextCshapesChange(year: number): number | null {
@@ -48,14 +49,24 @@ function loadRaw(): Promise<FeatureCollection> {
 
 export function filterCshapesYear(raw: FeatureCollection, year: number): FeatureCollection {
   const y = cshapesMapYear(year);
-  return {
-    type: 'FeatureCollection',
-    features: raw.features.filter((f) => {
-      const p = f.properties as { start?: number; end?: number } | null;
-      if (!p || p.start == null || p.end == null) return false;
-      return cshapesActiveOnDec31(p.start, p.end, y);
-    }),
-  };
+  const yEnd = y * 10000 + 1231;
+  const chosen = new Map<number, (typeof raw.features)[number]>();
+  for (const f of raw.features) {
+    const p = f.properties as { start?: number; end?: number; gwcode?: number; fid?: number } | null;
+    if (!p || p.start == null || p.end == null) continue;
+    if (!cshapesOverlapsYear(p.start, p.end, y)) continue;
+    const key = Number(p.gwcode ?? p.fid);
+    const onDec31 = p.start <= yEnd && yEnd <= p.end;
+    const prev = chosen.get(key);
+    if (!prev) {
+      chosen.set(key, f);
+      continue;
+    }
+    const prevP = prev.properties as { start: number; end: number };
+    const prevOnDec31 = prevP.start <= yEnd && yEnd <= prevP.end;
+    if (onDec31 && !prevOnDec31) chosen.set(key, f);
+  }
+  return { type: 'FeatureCollection', features: [...chosen.values()] };
 }
 
 export function loadCshapesYear(year: number): Promise<PreparedSnapshot> {

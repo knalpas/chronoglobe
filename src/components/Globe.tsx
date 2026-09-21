@@ -15,6 +15,7 @@ import type { FeatureCollection, Point } from 'geojson';
 import { CATEGORY_META, type HistoricalEvent } from '../data/events';
 import { loadCshapesYear } from '../data/cshapes';
 import { snapshotUrl, type Snapshot } from '../data/snapshots';
+import { UNCLAIMED_FILL } from '../lib/colors';
 import { graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
 import { formatYear } from '../lib/time';
 
@@ -178,6 +179,7 @@ function buildStyle(): StyleSpecification {
       'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 1, 6, 0],
     },
     sources: {
+      land: { type: 'geojson', data: `${import.meta.env.BASE_URL}data/borders/land.geojson` },
       regions: { type: 'geojson', data: EMPTY_FC, promoteId: 'fid' },
       labels: { type: 'geojson', data: EMPTY_FC },
       events: { type: 'geojson', data: EMPTY_FC },
@@ -185,6 +187,13 @@ function buildStyle(): StyleSpecification {
     },
     layers: [
       { id: 'ocean', type: 'background', paint: { 'background-color': OCEAN } },
+      {
+        id: 'land-fill',
+        type: 'fill',
+        source: 'land',
+        layout: { visibility: 'none' },
+        paint: { 'fill-color': UNCLAIMED_FILL, 'fill-opacity': 0.94, 'fill-antialias': true },
+      },
       {
         id: 'region-fill',
         type: 'fill',
@@ -526,6 +535,9 @@ export default function Globe({
         };
         source(map, 'regions')?.setData(prepared.regions);
         source(map, 'labels')?.setData(labels);
+        if (map.getLayer('land-fill')) {
+          map.setLayoutProperty('land-fill', 'visibility', snapshot.source === 'cshapes' ? 'visible' : 'none');
+        }
         regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
         hoveredRef.current = null;
         onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);

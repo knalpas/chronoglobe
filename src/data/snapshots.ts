@@ -1,5 +1,5 @@
-import { CSHAPES_END, CSHAPES_START, cshapesMapYear, nextCshapesChange, usesCshapes } from './cshapes';
-import { BC, formatYear } from '../lib/time';
+import { CSHAPES_START, cshapesMapYear, nextCshapesChange, usesCshapes } from './cshapes';
+import { BC } from '../lib/time';
 
 /**
  * One entry per border snapshot in the historical-basemaps dataset.
@@ -293,13 +293,7 @@ function nearestEditorial(year: number): string {
 }
 
 function cshapesSummary(year: number): string {
-  const mapYear = cshapesMapYear(year);
-  const editorial = nearestEditorial(mapYear);
-  const held =
-    year > CSHAPES_END
-      ? ` CShapes 2.0 ends in ${CSHAPES_END}; later changes are held at that map and noted in the event list.`
-      : '';
-  return `Borders for ${formatYear(mapYear)} from CShapes 2.0 (independent states and dependent territories as of 31 December).${held} ${editorial}`;
+  return nearestEditorial(cshapesMapYear(year));
 }
 
 export function snapshotFor(year: number): Snapshot {
