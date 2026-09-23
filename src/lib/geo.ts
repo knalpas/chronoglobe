@@ -1,5 +1,7 @@
 import polylabel from 'polylabel';
 import area from '@turf/area';
+import bbox from '@turf/bbox';
+import difference from '@turf/difference';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon, Point, MultiLineString, Position } from 'geojson';
 import { classifyRegion, colorForPower, CULTURE_FILL, UNCLAIMED_FILL, type RegionKind } from './colors';
 
@@ -147,6 +149,85 @@ export function pointInRegions(
     if (f.geometry && pointInFeature(f.geometry, lon, lat)) return true;
   }
   return false;
+}
+
+function boxesOverlap(a: [number, number, number, number], b: [number, number, number, number]): boolean {
+  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+}
+
+const MIN_GAP_KM2 = 2000;
+
+/**
+ * Keep only underlay polities that sit in holes of `cover`, and clip them so
+ * they cannot overlap cover polygons (1880 Arabia vs CShapes Egypt, etc.).
+ */
+export function clipUnderlayToGaps(underlay: PreparedSnapshot, cover: PreparedSnapshot): PreparedSnapshot {
+  const coverBoxes = cover.regions.features.map((f) => ({
+    f,
+    box: bbox(f) as [number, number, number, number],
+  }));
+  const coverNames = new Set(
+    cover.regions.features.map((f) => f.properties.NAME?.toLowerCase()).filter((n): n is string => !!n),
+  );
+  const regions: RegionFeature[] = [];
+  const labelsRaw: Array<{ fid: number; name: string; kind: RegionKind; areaKm2: number; color: string; pt: Position }> = [];
+
+  for (const feat of underlay.regions.features) {
+    const name = feat.properties.NAME;
+    if (feat.properties.kind !== 'polity' || !name) continue;
+    if (coverNames.has(name.toLowerCase())) continue;
+    const label = underlay.labels.features.find((l) => l.properties.fid === feat.properties.fid);
+    const pt = label?.geometry.coordinates;
+    if (!pt || pointInRegions(cover.regions, pt[0], pt[1])) continue;
+
+    const featBox = bbox(feat) as [number, number, number, number];
+    const neighbors = coverBoxes.filter(({ box }) => boxesOverlap(featBox, box)).map(({ f }) => f);
+    let geom = feat.geometry;
+    if (neighbors.length) {
+      try {
+        const clipped = difference({
+          type: 'FeatureCollection',
+          features: [feat, ...neighbors],
+        });
+        if (!clipped || (clipped.geometry.type !== 'Polygon' && clipped.geometry.type !== 'MultiPolygon')) continue;
+        geom = clipped.geometry;
+      } catch {
+        continue;
+      }
+    }
+
+    const areaKm2 = area({ type: 'Feature', geometry: geom, properties: {} }) / 1e6;
+    if (areaKm2 < MIN_GAP_KM2) continue;
+
+    const props = { ...feat.properties, areaKm2 };
+    regions.push({ type: 'Feature', id: props.fid, geometry: geom, properties: props });
+
+    const poly = largestPolygon(geom);
+    const labelPt = pointInFeature(geom, pt[0], pt[1])
+      ? pt
+      : (polylabel(poly as [number, number][][], 0.25) as unknown as Position);
+    labelsRaw.push({
+      fid: props.fid,
+      name,
+      kind: props.kind,
+      areaKm2,
+      color: props.color,
+      pt: labelPt,
+    });
+  }
+
+  labelsRaw.sort((a, b) => b.areaKm2 - a.areaKm2);
+  const labels: Feature<Point, LabelProps>[] = labelsRaw.map((l, rank) => ({
+    type: 'Feature',
+    id: l.fid,
+    geometry: { type: 'Point', coordinates: [l.pt[0], l.pt[1]] },
+    properties: { fid: l.fid, name: l.name, kind: l.kind, rank, areaKm2: l.areaKm2, color: l.color },
+  }));
+
+  return {
+    regions: { type: 'FeatureCollection', features: regions },
+    labels: { type: 'FeatureCollection', features: labels },
+  };
 }
 
 /** Graticule lines every `step` degrees, densified so they curve on the globe. */
