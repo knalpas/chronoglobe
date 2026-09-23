@@ -244,6 +244,7 @@ function buildStyle(): StyleSpecification {
         id: 'land-fill',
         type: 'fill',
         source: 'land',
+        layout: { visibility: 'none' },
         paint: { 'fill-color': UNCLAIMED_FILL, 'fill-opacity': 0.94, 'fill-antialias': true },
       },
       {

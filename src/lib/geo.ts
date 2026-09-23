@@ -155,7 +155,18 @@ function boxesOverlap(a: [number, number, number, number], b: [number, number, n
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
 
-const MIN_GAP_KM2 = 2000;
+function dropSmallParts(geom: Polygon | MultiPolygon, minKm2: number): Polygon | MultiPolygon | null {
+  const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+  const kept = polys.filter((poly) => {
+    const km2 = area({ type: 'Feature', geometry: { type: 'Polygon', coordinates: poly }, properties: {} }) / 1e6;
+    return km2 >= minKm2;
+  });
+  if (!kept.length) return null;
+  if (kept.length === 1) return { type: 'Polygon', coordinates: kept[0] };
+  return { type: 'MultiPolygon', coordinates: kept };
+}
+
+const MIN_GAP_KM2 = 8000;
 
 /**
  * Keep only underlay polities that sit in holes of `cover`, and clip them so
@@ -190,7 +201,9 @@ export function clipUnderlayToGaps(underlay: PreparedSnapshot, cover: PreparedSn
           features: [feat, ...neighbors],
         });
         if (!clipped || (clipped.geometry.type !== 'Polygon' && clipped.geometry.type !== 'MultiPolygon')) continue;
-        geom = clipped.geometry;
+        const cleaned = dropSmallParts(clipped.geometry, MIN_GAP_KM2);
+        if (!cleaned) continue;
+        geom = cleaned;
       } catch {
         continue;
       }
