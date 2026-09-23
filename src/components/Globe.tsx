@@ -230,7 +230,7 @@ function buildStyle(): StyleSpecification {
       'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 1, 6, 0],
     },
     sources: {
-      land: { type: 'geojson', data: `${import.meta.env.BASE_URL}data/borders/land.geojson` },
+      land: { type: 'geojson', data: `${import.meta.env.BASE_URL}data/borders/land-inset.geojson` },
       base: { type: 'geojson', data: EMPTY_FC, promoteId: 'fid' },
       regions: { type: 'geojson', data: EMPTY_FC, promoteId: 'fid' },
       'base-labels': { type: 'geojson', data: EMPTY_FC },
@@ -645,6 +645,9 @@ export default function Globe({
         const labels = withLabelSize(prepared.labels);
         source(map, 'regions')?.setData(prepared.regions);
         source(map, 'labels')?.setData(labels);
+        if (map.getLayer('land-fill')) {
+          map.setLayoutProperty('land-fill', 'visibility', snapshot.source === 'cshapes' ? 'visible' : 'none');
+        }
 
         const byFid = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
         let gapPolities = 0;
