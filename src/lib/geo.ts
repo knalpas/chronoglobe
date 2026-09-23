@@ -113,6 +113,42 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
   };
 }
 
+function pointInRing(ring: Position[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+export function pointInFeature(geom: Polygon | MultiPolygon, lon: number, lat: number): boolean {
+  const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+  for (const poly of polys) {
+    if (!pointInRing(poly[0], lon, lat)) continue;
+    let hole = false;
+    for (let i = 1; i < poly.length; i++) {
+      if (pointInRing(poly[i], lon, lat)) hole = true;
+    }
+    if (!hole) return true;
+  }
+  return false;
+}
+
+export function pointInRegions(
+  fc: FeatureCollection<Polygon | MultiPolygon, RegionProps>,
+  lon: number,
+  lat: number,
+): boolean {
+  for (const f of fc.features) {
+    if (f.geometry && pointInFeature(f.geometry, lon, lat)) return true;
+  }
+  return false;
+}
+
 /** Graticule lines every `step` degrees, densified so they curve on the globe. */
 export function graticule(step = 15): FeatureCollection<MultiLineString> {
   const lines: Position[][] = [];

@@ -14,9 +14,9 @@ import {
 import type { FeatureCollection, Point } from 'geojson';
 import { CATEGORY_META, type HistoricalEvent } from '../data/events';
 import { loadCshapesYear } from '../data/cshapes';
-import { snapshotUrl, type Snapshot } from '../data/snapshots';
+import { snapshotFor, snapshotUrl, type Snapshot } from '../data/snapshots';
 import { UNCLAIMED_FILL } from '../lib/colors';
-import { graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
+import { graticule, pointInRegions, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
 import { formatYear } from '../lib/time';
 
 export interface LayerToggles {
@@ -75,6 +75,9 @@ function chromePadding(panelCollapsed: boolean) {
   };
 }
 
+const GAP_FILL_OFFSET = 1_000_000;
+const GAP_FILL_SNAPSHOT = snapshotFor(1880);
+
 const snapshotCache = new Map<string, Promise<PreparedSnapshot>>();
 function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
   if (s.source === 'cshapes') return loadCshapesYear(s.year);
@@ -89,6 +92,44 @@ function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
     snapshotCache.set(s.file, p);
   }
   return p;
+}
+
+function offsetPrepared(prepared: PreparedSnapshot, offset: number): PreparedSnapshot {
+  return {
+    regions: {
+      type: 'FeatureCollection',
+      features: prepared.regions.features.map((f) => ({
+        ...f,
+        id: f.properties.fid + offset,
+        properties: { ...f.properties, fid: f.properties.fid + offset },
+      })),
+    },
+    labels: {
+      type: 'FeatureCollection',
+      features: prepared.labels.features.map((f) => ({
+        ...f,
+        id: f.properties.fid + offset,
+        properties: { ...f.properties, fid: f.properties.fid + offset },
+      })),
+    },
+  };
+}
+
+function withLabelSize(labels: PreparedSnapshot['labels']): PreparedSnapshot['labels'] {
+  return {
+    ...labels,
+    features: labels.features.map((f) => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        size: Math.min(1, Math.max(0, (Math.log10(Math.max(f.properties.areaKm2, 1)) - 4.3) / 2.9)),
+      },
+    })),
+  };
+}
+
+function regionSourceFor(fid: number): 'base' | 'regions' {
+  return fid >= GAP_FILL_OFFSET ? 'base' : 'regions';
 }
 
 function eventsToGeoJSON(events: HistoricalEvent[], year: number): FeatureCollection<Point> {
@@ -180,7 +221,9 @@ function buildStyle(): StyleSpecification {
     },
     sources: {
       land: { type: 'geojson', data: `${import.meta.env.BASE_URL}data/borders/land.geojson` },
+      base: { type: 'geojson', data: EMPTY_FC, promoteId: 'fid' },
       regions: { type: 'geojson', data: EMPTY_FC, promoteId: 'fid' },
+      'base-labels': { type: 'geojson', data: EMPTY_FC },
       labels: { type: 'geojson', data: EMPTY_FC },
       events: { type: 'geojson', data: EMPTY_FC },
       graticule: { type: 'geojson', data: graticule(15) },
@@ -191,8 +234,27 @@ function buildStyle(): StyleSpecification {
         id: 'land-fill',
         type: 'fill',
         source: 'land',
-        layout: { visibility: 'none' },
         paint: { 'fill-color': UNCLAIMED_FILL, 'fill-opacity': 0.94, 'fill-antialias': true },
+      },
+      {
+        id: 'base-fill',
+        type: 'fill',
+        source: 'base',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': ['match', ['get', 'kind'], 'polity', 0.92, 'culture', 0.9, 0.9],
+          'fill-antialias': true,
+        },
+      },
+      {
+        id: 'base-border',
+        type: 'line',
+        source: 'base',
+        paint: {
+          'line-color': BORDER,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 5, 0.9],
+          'line-opacity': 0.55,
+        },
       },
       {
         id: 'region-fill',
@@ -243,11 +305,34 @@ function buildStyle(): StyleSpecification {
         },
       },
       {
+        id: 'base-hover',
+        type: 'line',
+        source: 'base',
+        paint: {
+          'line-color': '#20160c',
+          'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2.2, 0],
+        },
+      },
+      {
         id: 'region-selected',
         type: 'line',
         source: 'regions',
         filter: ['==', ['get', 'fid'], -1],
         paint: { 'line-color': '#1a1208', 'line-width': 2.8 },
+      },
+      {
+        id: 'base-selected',
+        type: 'line',
+        source: 'base',
+        filter: ['==', ['get', 'fid'], -1],
+        paint: { 'line-color': '#1a1208', 'line-width': 2.8 },
+      },
+      {
+        id: 'base-labels',
+        type: 'symbol',
+        source: 'base-labels',
+        layout: labelLayout,
+        paint: labelPaint,
       },
       {
         id: 'labels-large',
@@ -434,16 +519,21 @@ export default function Globe({
 
     const setHover = (fid: number | null) => {
       if (hoveredRef.current === fid) return;
-      if (hoveredRef.current !== null) map.setFeatureState({ source: 'regions', id: hoveredRef.current }, { hover: false });
+      if (hoveredRef.current !== null) {
+        map.setFeatureState(
+          { source: regionSourceFor(hoveredRef.current), id: hoveredRef.current },
+          { hover: false },
+        );
+      }
       hoveredRef.current = fid;
-      if (fid !== null) map.setFeatureState({ source: 'regions', id: fid }, { hover: true });
+      if (fid !== null) map.setFeatureState({ source: regionSourceFor(fid), id: fid }, { hover: true });
     };
 
     const onMove = (e: MapMouseEvent) => {
       if (!map.getLayer('region-fill')) return;
-      const feats = map.queryRenderedFeatures(e.point, { layers: ['event-dot', 'region-fill'] });
+      const feats = map.queryRenderedFeatures(e.point, { layers: ['event-dot', 'region-fill', 'base-fill'] });
       const ev = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'event-dot');
-      const region = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'region-fill');
+      const region = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'region-fill' || f.layer.id === 'base-fill');
       map.getCanvas().style.cursor = ev || region ? 'pointer' : '';
 
       if (ev) {
@@ -480,13 +570,13 @@ export default function Globe({
     };
     const onClick = (e: MapMouseEvent) => {
       if (!map.getLayer('region-fill')) return;
-      const feats = map.queryRenderedFeatures(e.point, { layers: ['event-dot', 'region-fill'] });
+      const feats = map.queryRenderedFeatures(e.point, { layers: ['event-dot', 'region-fill', 'base-fill'] });
       const ev = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'event-dot');
       if (ev) {
         cbRef.current.onSelectEvent(String(ev.properties.id));
         return;
       }
-      const region = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'region-fill');
+      const region = feats.find((f: MapGeoJSONFeature) => f.layer.id === 'region-fill' || f.layer.id === 'base-fill');
       if (region) {
         const fid = Number((region.properties as RegionProps).fid);
         const full = regionsRef.current.get(fid) ?? (region.properties as RegionProps);
@@ -524,31 +614,50 @@ export default function Globe({
   }, [panelCollapsed, ready]);
 
   useEffect(() => {
+    if (!ready) return;
+    loadSnapshot(GAP_FILL_SNAPSHOT);
+    loadCshapesYear(1886);
+  }, [ready]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
     let cancelled = false;
     onLoadingChange(true);
-    loadSnapshot(snapshot)
-      .then((prepared) => {
+    const load = snapshot.source === 'cshapes'
+      ? Promise.all([loadSnapshot(snapshot), loadSnapshot(GAP_FILL_SNAPSHOT)])
+      : loadSnapshot(snapshot).then((prepared) => [prepared, null] as const);
+
+    load
+      .then(([prepared, underlay]) => {
         if (cancelled || !mapRef.current) return;
-        const labels = {
-          ...prepared.labels,
-          features: prepared.labels.features.map((f) => ({
-            ...f,
-            properties: {
-              ...f.properties,
-              size: Math.min(1, Math.max(0, (Math.log10(Math.max(f.properties.areaKm2, 1)) - 4.3) / 2.9)),
-            },
-          })),
-        };
+        const labels = withLabelSize(prepared.labels);
         source(map, 'regions')?.setData(prepared.regions);
         source(map, 'labels')?.setData(labels);
-        if (map.getLayer('land-fill')) {
-          map.setLayoutProperty('land-fill', 'visibility', snapshot.source === 'cshapes' ? 'visible' : 'none');
+
+        const byFid = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+        let gapPolities = 0;
+        if (underlay) {
+          const base = offsetPrepared(underlay, GAP_FILL_OFFSET);
+          const gapLabels = withLabelSize({
+            ...base.labels,
+            features: base.labels.features.filter((f) => {
+              const [lon, lat] = f.geometry.coordinates;
+              return !pointInRegions(prepared.regions, lon, lat);
+            }),
+          });
+          source(map, 'base')?.setData(base.regions);
+          source(map, 'base-labels')?.setData(gapLabels);
+          for (const f of base.regions.features) byFid.set(f.properties.fid, f.properties);
+          gapPolities = gapLabels.features.filter((f) => f.properties.kind === 'polity').length;
+        } else {
+          source(map, 'base')?.setData(EMPTY_FC);
+          source(map, 'base-labels')?.setData(EMPTY_FC);
         }
-        regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+
+        regionsRef.current = byFid;
         hoveredRef.current = null;
-        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
+        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length + gapPolities);
         onLoadingChange(false);
       })
       .catch((err) => {
@@ -575,7 +684,11 @@ export default function Globe({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !map.getLayer('region-selected')) return;
-    map.setFilter('region-selected', ['==', ['get', 'fid'], selectedRegionFid ?? -1]);
+    const fid = selectedRegionFid ?? -1;
+    map.setFilter('region-selected', ['==', ['get', 'fid'], fid]);
+    if (map.getLayer('base-selected')) {
+      map.setFilter('base-selected', ['==', ['get', 'fid'], fid]);
+    }
   }, [selectedRegionFid, ready]);
 
   useEffect(() => {
@@ -585,7 +698,7 @@ export default function Globe({
       ids.forEach((id) => {
         if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
       });
-    vis(['labels-large', 'labels-mid', 'labels-small'], layers.labels);
+    vis(['labels-large', 'labels-mid', 'labels-small', 'base-labels'], layers.labels);
     vis(['graticule'], layers.graticule);
     vis(['event-halo', 'event-dot', 'event-selected', 'event-label'], layers.events);
   }, [layers, ready]);
