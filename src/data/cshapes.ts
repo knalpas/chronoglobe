@@ -40,17 +40,48 @@ function cshapesUrl(): string {
   return `${import.meta.env.BASE_URL}data/borders/cshapes.geojson`;
 }
 
-let rawCache: Promise<FeatureCollection> | null = null;
-const yearCache = new Map<number, Promise<PreparedSnapshot>>();
+let rawData: FeatureCollection | null = null;
+let rawInflight: Promise<FeatureCollection> | null = null;
+let rawAc: AbortController | null = null;
+const yearCache = new Map<number, PreparedSnapshot>();
 
-function loadRaw(): Promise<FeatureCollection> {
-  if (!rawCache) {
-    rawCache = fetch(cshapesUrl()).then((r) => {
-      if (!r.ok) throw new Error(`Failed to load CShapes: ${r.status}`);
-      return r.json();
-    });
+function aborted(): never {
+  throw new DOMException('Aborted', 'AbortError');
+}
+
+function loadRaw(signal?: AbortSignal): Promise<FeatureCollection> {
+  if (rawData) {
+    if (signal?.aborted) aborted();
+    return Promise.resolve(rawData);
   }
-  return rawCache;
+  if (!rawInflight) {
+    rawAc = new AbortController();
+    rawInflight = fetch(cshapesUrl(), { signal: rawAc.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load CShapes: ${r.status}`);
+        return r.json() as Promise<FeatureCollection>;
+      })
+      .then((data) => {
+        rawData = data;
+        rawInflight = null;
+        rawAc = null;
+        return data;
+      })
+      .catch((err) => {
+        rawInflight = null;
+        rawAc = null;
+        throw err;
+      });
+  }
+  return rawInflight.then((data) => {
+    if (signal?.aborted) aborted();
+    return data;
+  });
+}
+
+/** Drop an in-flight CShapes download when the user has left that era. */
+export function cancelCshapesDownload() {
+  rawAc?.abort();
 }
 
 export function filterCshapesYear(raw: FeatureCollection, year: number): FeatureCollection {
@@ -75,12 +106,16 @@ export function filterCshapesYear(raw: FeatureCollection, year: number): Feature
   return { type: 'FeatureCollection', features: [...chosen.values()] };
 }
 
-export function loadCshapesYear(year: number): Promise<PreparedSnapshot> {
+export async function loadCshapesYear(year: number, signal?: AbortSignal): Promise<PreparedSnapshot> {
   const y = cshapesMapYear(year);
-  let p = yearCache.get(y);
-  if (!p) {
-    p = loadRaw().then((raw) => prepareSnapshot(filterCshapesYear(raw, y)));
-    yearCache.set(y, p);
+  const hit = yearCache.get(y);
+  if (hit) {
+    if (signal?.aborted) aborted();
+    return hit;
   }
-  return p;
+  const raw = await loadRaw(signal);
+  if (signal?.aborted) aborted();
+  const prepared = prepareSnapshot(filterCshapesYear(raw, y));
+  yearCache.set(y, prepared);
+  return prepared;
 }

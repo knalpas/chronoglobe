@@ -13,7 +13,7 @@ import {
 } from 'maplibre-gl';
 import type { FeatureCollection, Point } from 'geojson';
 import { CATEGORY_META, type HistoricalEvent } from '../data/events';
-import { loadCshapesYear } from '../data/cshapes';
+import { cancelCshapesDownload, loadCshapesYear } from '../data/cshapes';
 import { snapshotUrl, type Snapshot } from '../data/snapshots';
 import { UNCLAIMED_FILL } from '../lib/colors';
 import { graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
@@ -75,21 +75,31 @@ function chromePadding(panelCollapsed: boolean) {
   };
 }
 
-const snapshotCache = new Map<string, Promise<PreparedSnapshot>>();
+const snapshotCache = new Map<string, PreparedSnapshot>();
 
-function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
-  if (s.source === 'cshapes') return loadCshapesYear(s.year);
-  let p = snapshotCache.get(s.file);
-  if (!p) {
-    p = fetch(snapshotUrl(s))
-      .then((r) => {
-        if (!r.ok) throw new Error(`Failed to load ${s.file}: ${r.status}`);
-        return r.json();
-      })
-      .then((raw) => prepareSnapshot(raw));
-    snapshotCache.set(s.file, p);
+function aborted(): never {
+  throw new DOMException('Aborted', 'AbortError');
+}
+
+function loadSnapshot(s: Snapshot, signal?: AbortSignal): Promise<PreparedSnapshot> {
+  if (s.source === 'cshapes') return loadCshapesYear(s.year, signal);
+  const hit = snapshotCache.get(s.file);
+  if (hit) {
+    if (signal?.aborted) aborted();
+    return Promise.resolve(hit);
   }
-  return p;
+  return fetch(snapshotUrl(s), { signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`Failed to load ${s.file}: ${r.status}`);
+      if (signal?.aborted) aborted();
+      return r.json();
+    })
+    .then((raw) => {
+      if (signal?.aborted) aborted();
+      const prepared = prepareSnapshot(raw);
+      snapshotCache.set(s.file, prepared);
+      return prepared;
+    });
 }
 
 function withLabelSize(labels: PreparedSnapshot['labels']): PreparedSnapshot['labels'] {
@@ -542,20 +552,23 @@ export default function Globe({
     map.setPadding(chromePadding(panelCollapsed));
   }, [panelCollapsed, ready]);
 
-  const loadGen = useRef(0);
+  const wantedRef = useRef(snapshot);
+  wantedRef.current = snapshot;
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
     const wanted = snapshot;
-    const gen = ++loadGen.current;
+    const ac = new AbortController();
+    const isCurrent = () =>
+      wantedRef.current.file === wanted.file && wantedRef.current.year === wanted.year;
     const loadingTimer = window.setTimeout(() => {
-      if (loadGen.current === gen) onLoadingChange(true);
+      if (isCurrent()) onLoadingChange(true);
     }, 160);
-    loadSnapshot(wanted)
+    loadSnapshot(wanted, ac.signal)
       .then((prepared) => {
         clearTimeout(loadingTimer);
-        if (gen !== loadGen.current || !mapRef.current) return;
+        if (!isCurrent() || !mapRef.current) return;
         if (map.getLayer('land-fill') && wanted.source === 'cshapes') {
           map.setLayoutProperty('land-fill', 'visibility', 'visible');
         }
@@ -563,7 +576,7 @@ export default function Globe({
         source(map, 'labels')?.setData(withLabelSize(prepared.labels));
         if (map.getLayer('land-fill') && wanted.source !== 'cshapes') {
           map.once('idle', () => {
-            if (gen !== loadGen.current || !mapRef.current) return;
+            if (!isCurrent() || !mapRef.current) return;
             map.setLayoutProperty('land-fill', 'visibility', 'none');
           });
         }
@@ -573,12 +586,15 @@ export default function Globe({
         onLoadingChange(false);
       })
       .catch((err) => {
-        console.error(err);
         clearTimeout(loadingTimer);
-        if (gen === loadGen.current) onLoadingChange(false);
+        if (err?.name === 'AbortError') return;
+        console.error(err);
+        if (isCurrent()) onLoadingChange(false);
       });
     return () => {
+      ac.abort();
       clearTimeout(loadingTimer);
+      if (wantedRef.current.source !== 'cshapes') cancelCshapesDownload();
     };
   }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange, onRegionCount]);
 
