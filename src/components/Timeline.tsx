@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { eraFor, ERAS } from '../data/eras';
+import { ERAS } from '../data/eras';
 import { ALL_EVENTS, CATEGORY_META, CURATED_EVENTS, type HistoricalEvent } from '../data/events';
 import { CSHAPES_CHANGE_YEARS, CSHAPES_START } from '../data/cshapes';
 import { SNAPSHOT_YEARS } from '../data/snapshots';
@@ -143,26 +143,6 @@ const MACRO_TICK_YEARS = [
 
 type Zone = 'track' | 'lens';
 
-function onEraBand(y: number): boolean {
-  return y >= BAND_TOP - 2 && y <= BAND_BOTTOM + 2;
-}
-
-/** A click (not a drag) on an era band lands on a snapshot that belongs to that era. */
-function snapEraClick(yearAtX: number): number {
-  const era = eraFor(yearAtX);
-  let best: number | null = null;
-  let bestD = Infinity;
-  for (const y0 of BORDER_TICK_YEARS) {
-    if (y0 < era.start || y0 > era.end) continue;
-    const d = Math.abs(y0 - yearAtX);
-    if (d < bestD) {
-      best = y0;
-      bestD = d;
-    }
-  }
-  return best ?? clampYear(Math.round((era.start + era.end) / 2));
-}
-
 export default function Timeline({ year, onChange, onPreview, highlightEventId, onPickEvent }: TimelineProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -174,8 +154,6 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   const stickyRef = useRef<Array<{ id: string; row: number }>>([]);
   const yearRef = useRef(year);
   yearRef.current = year;
-  const downRef = useRef<{ x: number; y: number; onBand: boolean } | null>(null);
-  const draggedRef = useRef(false);
 
   // ── Responsive width ────────────────────────────────────────────────────
   useEffect(() => {
@@ -233,9 +211,6 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
     const { x, y } = localPoint(e);
     setPointerX(x);
     if (dragZone === 'track') {
-      if (downRef.current && Math.hypot(x - downRef.current.x, y - downRef.current.y) > 5) {
-        draggedRef.current = true;
-      }
       const yr = yearAt(x);
       setLensCenter(yr);
       setPreview(yr);
@@ -277,8 +252,6 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
     const { x, y } = localPoint(e);
     const zone = zoneAt(x, y);
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    downRef.current = { x, y, onBand: zone === 'track' && onEraBand(y) };
-    draggedRef.current = false;
     setDragZone(zone);
     if (zone === 'lens' && lens) {
       const yr = lens.yearAtLens(x);
@@ -293,14 +266,6 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   };
 
   const handleUp = (e: ReactPointerEvent) => {
-    const down = downRef.current;
-    if (down?.onBand && !draggedRef.current) {
-      const yr = snapEraClick(yearAt(down.x));
-      setLensCenter(yr);
-      setPreview(yr);
-      onChange(yr);
-    }
-    downRef.current = null;
     setDragZone(null);
     try {
       (e.currentTarget as Element).releasePointerCapture(e.pointerId);
