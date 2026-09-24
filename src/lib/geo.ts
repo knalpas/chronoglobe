@@ -25,6 +25,8 @@ export interface LabelProps {
   rank: number;
   areaKm2: number;
   color: string;
+  /** 0–1, derived from area; drives MapLibre text size. */
+  size: number;
 }
 
 export interface PreparedSnapshot {
@@ -78,9 +80,13 @@ function approxAreaKm2(geom: MultiPolygon | Polygon): number {
   return deg2 * 12321;
 }
 
+function labelSize(areaKm2: number): number {
+  return Math.min(1, Math.max(0, (Math.log10(Math.max(areaKm2, 1)) - 4.3) / 2.9));
+}
+
 /**
- * Enrich a raw snapshot: classify regions, assign colours, and place one label
- * at the bbox centre of each region’s largest ring.
+ * Enrich a raw snapshot in place: classify regions, assign colours, and place
+ * one label at the bbox centre of each region’s largest ring.
  */
 export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
   const regions: RegionFeature[] = [];
@@ -108,7 +114,9 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
       power,
       areaKm2,
     };
-    regions.push({ type: 'Feature', id: fid, geometry: f.geometry, properties: props });
+    f.id = fid;
+    f.properties = props;
+    regions.push(f as RegionFeature);
 
     if (name) {
       labelsRaw.push({ fid, name, kind, areaKm2, color, pt: ringBboxCenter(largestRing(f.geometry)) });
@@ -120,7 +128,15 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
     type: 'Feature',
     id: l.fid,
     geometry: { type: 'Point', coordinates: [l.pt[0], l.pt[1]] },
-    properties: { fid: l.fid, name: l.name, kind: l.kind, rank, areaKm2: l.areaKm2, color: l.color },
+    properties: {
+      fid: l.fid,
+      name: l.name,
+      kind: l.kind,
+      rank,
+      areaKm2: l.areaKm2,
+      color: l.color,
+      size: labelSize(l.areaKm2),
+    },
   }));
 
   return {

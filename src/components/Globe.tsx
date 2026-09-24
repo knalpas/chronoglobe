@@ -14,7 +14,7 @@ import {
 import type { FeatureCollection, Point } from 'geojson';
 import { CATEGORY_META, type HistoricalEvent } from '../data/events';
 import { cancelCshapesDownload, loadCshapesYear } from '../data/cshapes';
-import { snapshotUrl, type Snapshot } from '../data/snapshots';
+import { SNAPSHOTS, snapshotUrl, type Snapshot } from '../data/snapshots';
 import { UNCLAIMED_FILL } from '../lib/colors';
 import { graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
 import { formatYear } from '../lib/time';
@@ -76,43 +76,39 @@ function chromePadding(panelCollapsed: boolean) {
 }
 
 const snapshotCache = new Map<string, PreparedSnapshot>();
+const snapshotInflight = new Map<string, Promise<PreparedSnapshot>>();
 
-function aborted(): never {
-  throw new DOMException('Aborted', 'AbortError');
-}
-
-function loadSnapshot(s: Snapshot, signal?: AbortSignal): Promise<PreparedSnapshot> {
-  if (s.source === 'cshapes') return loadCshapesYear(s.year, signal);
+function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
+  if (s.source === 'cshapes') return loadCshapesYear(s.year);
   const hit = snapshotCache.get(s.file);
-  if (hit) {
-    if (signal?.aborted) aborted();
-    return Promise.resolve(hit);
+  if (hit) return Promise.resolve(hit);
+  let p = snapshotInflight.get(s.file);
+  if (!p) {
+    p = fetch(snapshotUrl(s))
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load ${s.file}: ${r.status}`);
+        return r.json();
+      })
+      .then((raw) => {
+        const prepared = prepareSnapshot(raw);
+        snapshotCache.set(s.file, prepared);
+        return prepared;
+      })
+      .finally(() => {
+        snapshotInflight.delete(s.file);
+      });
+    snapshotInflight.set(s.file, p);
   }
-  return fetch(snapshotUrl(s), { signal })
-    .then((r) => {
-      if (!r.ok) throw new Error(`Failed to load ${s.file}: ${r.status}`);
-      if (signal?.aborted) aborted();
-      return r.json();
-    })
-    .then((raw) => {
-      if (signal?.aborted) aborted();
-      const prepared = prepareSnapshot(raw);
-      snapshotCache.set(s.file, prepared);
-      return prepared;
-    });
+  return p;
 }
 
-function withLabelSize(labels: PreparedSnapshot['labels']): PreparedSnapshot['labels'] {
-  return {
-    ...labels,
-    features: labels.features.map((f) => ({
-      ...f,
-      properties: {
-        ...f.properties,
-        size: Math.min(1, Math.max(0, (Math.log10(Math.max(f.properties.areaKm2, 1)) - 4.3) / 2.9)),
-      },
-    })),
-  };
+function prefetchNeighbors(file: string) {
+  const i = SNAPSHOTS.findIndex((s) => s.file === file);
+  if (i < 0) return;
+  for (const n of [SNAPSHOTS[i - 1], SNAPSHOTS[i + 1]]) {
+    if (!n) continue;
+    void loadSnapshot({ ...n, source: 'basemaps' });
+  }
 }
 
 function eventsToGeoJSON(events: HistoricalEvent[], year: number): FeatureCollection<Point> {
@@ -559,24 +555,22 @@ export default function Globe({
     const map = mapRef.current;
     if (!map || !ready) return;
     const wanted = snapshot;
-    const ac = new AbortController();
-    const isCurrent = () =>
-      wantedRef.current.file === wanted.file && wantedRef.current.year === wanted.year;
+    let cancelled = false;
     const loadingTimer = window.setTimeout(() => {
-      if (isCurrent()) onLoadingChange(true);
-    }, 160);
-    loadSnapshot(wanted, ac.signal)
+      if (!cancelled) onLoadingChange(true);
+    }, 120);
+    loadSnapshot(wanted)
       .then((prepared) => {
         clearTimeout(loadingTimer);
-        if (!isCurrent() || !mapRef.current) return;
+        if (cancelled || !mapRef.current) return;
         if (map.getLayer('land-fill') && wanted.source === 'cshapes') {
           map.setLayoutProperty('land-fill', 'visibility', 'visible');
         }
         source(map, 'regions')?.setData(prepared.regions);
-        source(map, 'labels')?.setData(withLabelSize(prepared.labels));
+        source(map, 'labels')?.setData(prepared.labels);
         if (map.getLayer('land-fill') && wanted.source !== 'cshapes') {
           map.once('idle', () => {
-            if (!isCurrent() || !mapRef.current) return;
+            if (cancelled || !mapRef.current) return;
             map.setLayoutProperty('land-fill', 'visibility', 'none');
           });
         }
@@ -584,17 +578,22 @@ export default function Globe({
         hoveredRef.current = null;
         onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
         onLoadingChange(false);
+        if (wanted.source !== 'cshapes') {
+          const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 240));
+          idle(() => prefetchNeighbors(wanted.file));
+        }
       })
       .catch((err) => {
         clearTimeout(loadingTimer);
-        if (err?.name === 'AbortError') return;
         console.error(err);
-        if (isCurrent()) onLoadingChange(false);
+        if (!cancelled) onLoadingChange(false);
       });
     return () => {
-      ac.abort();
+      cancelled = true;
       clearTimeout(loadingTimer);
-      if (wantedRef.current.source !== 'cshapes') cancelCshapesDownload();
+      if (wanted.source === 'cshapes' && wantedRef.current.source !== 'cshapes') {
+        cancelCshapesDownload();
+      }
     };
   }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange, onRegionCount]);
 
