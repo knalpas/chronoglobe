@@ -550,52 +550,96 @@ export default function Globe({
 
   const wantedRef = useRef(snapshot);
   wantedRef.current = snapshot;
+  const lastAppliedRef = useRef('');
+  const paintBusy = useRef(false);
+  const paintQueue = useRef<{ prepared: PreparedSnapshot; snap: Snapshot } | null>(null);
+  const paintCbs = useRef({ onLoadingChange, onRegionCount });
+  paintCbs.current = { onLoadingChange, onRegionCount };
+
+  const snapKey = (s: Snapshot) => `${s.source}:${s.file}:${s.year}`;
+
+  const applyToMap = (prepared: PreparedSnapshot, snap: Snapshot) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const latest = wantedRef.current;
+    if (latest.file !== snap.file || latest.year !== snap.year) {
+      if (snapKey(latest) !== lastAppliedRef.current) {
+        void loadSnapshot(latest).then((p) => applyToMap(p, latest));
+      }
+      return;
+    }
+    if (paintBusy.current) {
+      paintQueue.current = { prepared, snap };
+      return;
+    }
+    paintBusy.current = true;
+    if (map.getLayer('land-fill') && snap.source === 'cshapes') {
+      map.setLayoutProperty('land-fill', 'visibility', 'visible');
+    }
+    source(map, 'regions')?.setData(prepared.regions);
+    source(map, 'labels')?.setData(prepared.labels);
+    if (map.getLayer('land-fill') && snap.source !== 'cshapes') {
+      map.once('idle', () => {
+        if (!mapRef.current) return;
+        if (wantedRef.current.file === snap.file) {
+          map.setLayoutProperty('land-fill', 'visibility', 'none');
+        }
+      });
+    }
+    regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+    hoveredRef.current = null;
+    lastAppliedRef.current = snapKey(snap);
+    paintCbs.current.onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
+    paintCbs.current.onLoadingChange(false);
+    if (snap.source !== 'cshapes') {
+      const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 240));
+      idle(() => prefetchNeighbors(snap.file));
+    }
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      paintBusy.current = false;
+      const q = paintQueue.current;
+      paintQueue.current = null;
+      const now = wantedRef.current;
+      if (q && q.snap.file === now.file && q.snap.year === now.year) {
+        applyToMap(q.prepared, q.snap);
+        return;
+      }
+      if (snapKey(now) !== lastAppliedRef.current) {
+        void loadSnapshot(now).then((p) => applyToMap(p, now));
+      }
+    };
+    map.once('idle', settle);
+    window.setTimeout(settle, 280);
+  };
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
     const wanted = snapshot;
-    let cancelled = false;
     const loadingTimer = window.setTimeout(() => {
-      if (!cancelled) onLoadingChange(true);
+      if (snapKey(wantedRef.current) !== lastAppliedRef.current) onLoadingChange(true);
     }, 120);
     loadSnapshot(wanted)
       .then((prepared) => {
         clearTimeout(loadingTimer);
-        if (cancelled || !mapRef.current) return;
-        if (map.getLayer('land-fill') && wanted.source === 'cshapes') {
-          map.setLayoutProperty('land-fill', 'visibility', 'visible');
-        }
-        source(map, 'regions')?.setData(prepared.regions);
-        source(map, 'labels')?.setData(prepared.labels);
-        if (map.getLayer('land-fill') && wanted.source !== 'cshapes') {
-          map.once('idle', () => {
-            if (cancelled || !mapRef.current) return;
-            map.setLayoutProperty('land-fill', 'visibility', 'none');
-          });
-        }
-        regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
-        hoveredRef.current = null;
-        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
-        onLoadingChange(false);
-        if (wanted.source !== 'cshapes') {
-          const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 240));
-          idle(() => prefetchNeighbors(wanted.file));
-        }
+        applyToMap(prepared, wanted);
       })
       .catch((err) => {
         clearTimeout(loadingTimer);
         console.error(err);
-        if (!cancelled) onLoadingChange(false);
+        if (snapKey(wantedRef.current) === snapKey(wanted)) onLoadingChange(false);
       });
     return () => {
-      cancelled = true;
       clearTimeout(loadingTimer);
       if (wanted.source === 'cshapes' && wantedRef.current.source !== 'cshapes') {
         cancelCshapesDownload();
       }
     };
-  }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange, onRegionCount]);
+  }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange]);
 
   useEffect(() => {
     const map = mapRef.current;
