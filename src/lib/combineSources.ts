@@ -29,7 +29,10 @@ export function combineWorldWithPatches(
     kept = kept.filter((f) => {
       const name = String(f.properties?.NAME ?? '').toLowerCase();
       if (replace.has(name)) return false;
-      return !bboxContainsCentroid(spec.bbox, f.geometry);
+      // Default is names-only. Dropping every centroid in the bbox would
+      // delete neighbours (the CShapes-class mistake) just to insert Rome.
+      if (spec.cutMode === 'names+bbox') return !bboxContainsCentroid(spec.bbox, f.geometry);
+      return true;
     });
     added.push(
       ...features.filter((f) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')),
