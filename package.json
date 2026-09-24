@@ -15,8 +15,6 @@
   },
   "dependencies": {
     "@turf/area": "^7.4.0",
-    "@turf/bbox": "^7.4.0",
-    "@turf/difference": "^7.4.0",
     "maplibre-gl": "^6.7.0",
     "polylabel": "^2.1.0",
     "react": "^19.2.8",

@@ -53,13 +53,13 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
               historical-basemaps
             </a>{' '}
             project by André Ourednik and contributors (GPL-3.0), which provides {SNAPSHOTS.length} snapshots between 5000 BC
-            and 1880. From 1886,{' '}
+            and 1880. From 1886 the globe uses{' '}
             <a href="https://icr.ethz.ch/data/cshapes/" target="_blank" rel="noreferrer">
               CShapes 2.0
             </a>{' '}
-            (Schvitz et al. 2022) is drawn on top of that 1880 map so independent states and dependencies can change year
-            by year without the rest of the world dropping out. The side panel always states which year the polygons
-            represent. Before 1886 the map is held at the latest historical-basemaps snapshot.
+            (Schvitz et al. 2022), a coded GIS of independent states and dependencies through 2019, so borders can change
+            year by year. The side panel always states which year the polygons represent. Before 1886 the map is held at
+            the latest historical-basemaps snapshot.
           </p>
           <p>
             Colours follow the ruling power (colonies share their metropole’s hue). <b>Dashed</b> borders are flagged as

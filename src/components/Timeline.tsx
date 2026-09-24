@@ -46,7 +46,10 @@ const YEAR_FONT = '650 9.5px Inter, ui-sans-serif, system-ui, sans-serif';
 const TITLE_FONT = '400 10px Inter, ui-sans-serif, system-ui, sans-serif';
 const YEAR_PAD_X = 5;
 const TITLE_PAD_X = 6;
-const BORDER_TICK_YEARS = [...SNAPSHOT_YEARS.filter((y) => y < CSHAPES_START), ...CSHAPES_CHANGE_YEARS];
+const BORDER_TICK_YEARS = [
+  ...SNAPSHOT_YEARS.filter((y) => y < CSHAPES_START),
+  ...CSHAPES_CHANGE_YEARS.filter((y) => y >= CSHAPES_START),
+];
 
 const EDGE_APPEAR = 16;
 const EDGE_KEEP = 3;
