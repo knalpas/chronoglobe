@@ -16,7 +16,7 @@ import { CATEGORY_META, type HistoricalEvent } from '../data/events';
 import { loadCshapesYear } from '../data/cshapes';
 import { snapshotFor, snapshotUrl, type Snapshot } from '../data/snapshots';
 import { UNCLAIMED_FILL } from '../lib/colors';
-import { clipUnderlayToGaps, graticule, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
+import { graticule, pointInRegions, prepareSnapshot, type PreparedSnapshot, type RegionProps } from '../lib/geo';
 import { formatYear } from '../lib/time';
 
 export interface LayerToggles {
@@ -79,16 +79,7 @@ const GAP_FILL_OFFSET = 1_000_000;
 const GAP_FILL_SNAPSHOT = snapshotFor(1880);
 
 const snapshotCache = new Map<string, Promise<PreparedSnapshot>>();
-const gapFillCache = new Map<number, PreparedSnapshot>();
 
-function gapFillFor(year: number, underlay: PreparedSnapshot, cover: PreparedSnapshot): PreparedSnapshot {
-  let gaps = gapFillCache.get(year);
-  if (!gaps) {
-    gaps = clipUnderlayToGaps(underlay, cover);
-    gapFillCache.set(year, gaps);
-  }
-  return gaps;
-}
 function loadSnapshot(s: Snapshot): Promise<PreparedSnapshot> {
   if (s.source === 'cshapes') return loadCshapesYear(s.year);
   let p = snapshotCache.get(s.file);
@@ -643,29 +634,42 @@ export default function Globe({
       .then(([prepared, underlay]) => {
         if (cancelled || !mapRef.current) return;
         const labels = withLabelSize(prepared.labels);
-        source(map, 'regions')?.setData(prepared.regions);
-        source(map, 'labels')?.setData(labels);
-        if (map.getLayer('land-fill')) {
-          map.setLayoutProperty('land-fill', 'visibility', snapshot.source === 'cshapes' ? 'visible' : 'none');
+        const byFid = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+        let extraPolities = 0;
+
+        if (underlay) {
+          const base = offsetPrepared(underlay, GAP_FILL_OFFSET);
+          const gapLabels = withLabelSize({
+            ...base.labels,
+            features: base.labels.features.filter((f) => {
+              const [lon, lat] = f.geometry.coordinates;
+              return !pointInRegions(prepared.regions, lon, lat);
+            }),
+          });
+          // Keep the 1880 world on screen first so CShapes holes never flash as ocean.
+          source(map, 'base')?.setData(base.regions);
+          source(map, 'base-labels')?.setData(gapLabels);
+          source(map, 'regions')?.setData(prepared.regions);
+          source(map, 'labels')?.setData(labels);
+          for (const f of base.regions.features) byFid.set(f.properties.fid, f.properties);
+          extraPolities = gapLabels.features.filter((f) => f.properties.kind === 'polity').length;
+        } else {
+          source(map, 'regions')?.setData(prepared.regions);
+          source(map, 'labels')?.setData(labels);
+          map.once('idle', () => {
+            if (cancelled || !mapRef.current) return;
+            source(map, 'base')?.setData(EMPTY_FC);
+            source(map, 'base-labels')?.setData(EMPTY_FC);
+          });
         }
 
-        const byFid = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
-        let gapPolities = 0;
-        if (underlay) {
-          const gaps = offsetPrepared(gapFillFor(snapshot.year, underlay, prepared), GAP_FILL_OFFSET);
-          const gapLabels = withLabelSize(gaps.labels);
-          source(map, 'base')?.setData(gaps.regions);
-          source(map, 'base-labels')?.setData(gapLabels);
-          for (const f of gaps.regions.features) byFid.set(f.properties.fid, f.properties);
-          gapPolities = gapLabels.features.filter((f) => f.properties.kind === 'polity').length;
-        } else {
-          source(map, 'base')?.setData(EMPTY_FC);
-          source(map, 'base-labels')?.setData(EMPTY_FC);
+        if (map.getLayer('land-fill')) {
+          map.setLayoutProperty('land-fill', 'visibility', 'none');
         }
 
         regionsRef.current = byFid;
         hoveredRef.current = null;
-        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length + gapPolities);
+        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length + extraPolities);
         onLoadingChange(false);
       })
       .catch((err) => {
