@@ -143,9 +143,12 @@ const MACRO_TICK_YEARS = [
 
 type Zone = 'track' | 'lens';
 
-/** Era-band clicks land on a snapshot that actually belongs to that era. */
-function yearOnTrack(yearAtX: number, y: number): number {
-  if (y < BAND_TOP - 2 || y > BAND_BOTTOM + 2) return yearAtX;
+function onEraBand(y: number): boolean {
+  return y >= BAND_TOP - 2 && y <= BAND_BOTTOM + 2;
+}
+
+/** A click (not a drag) on an era band lands on a snapshot that belongs to that era. */
+function snapEraClick(yearAtX: number): number {
   const era = eraFor(yearAtX);
   let best: number | null = null;
   let bestD = Infinity;
@@ -169,6 +172,10 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   const [dragZone, setDragZone] = useState<Zone | null>(null);
   const [pointerX, setPointerX] = useState<number | null>(null);
   const stickyRef = useRef<Array<{ id: string; row: number }>>([]);
+  const yearRef = useRef(year);
+  yearRef.current = year;
+  const downRef = useRef<{ x: number; y: number; onBand: boolean } | null>(null);
+  const draggedRef = useRef(false);
 
   // ── Responsive width ────────────────────────────────────────────────────
   useEffect(() => {
@@ -226,7 +233,10 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
     const { x, y } = localPoint(e);
     setPointerX(x);
     if (dragZone === 'track') {
-      const yr = yearOnTrack(yearAt(x), y);
+      if (downRef.current && Math.hypot(x - downRef.current.x, y - downRef.current.y) > 5) {
+        draggedRef.current = true;
+      }
+      const yr = yearAt(x);
       setLensCenter(yr);
       setPreview(yr);
       onChange(yr);
@@ -255,7 +265,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
       setPreview(yr);
       onPreview?.(yr);
     } else {
-      const yr = yearOnTrack(yearAt(x), y);
+      const yr = yearAt(x);
       setLensCenter(yr);
       setPreview(yr);
       onPreview?.(yr);
@@ -267,13 +277,15 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
     const { x, y } = localPoint(e);
     const zone = zoneAt(x, y);
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    downRef.current = { x, y, onBand: zone === 'track' && onEraBand(y) };
+    draggedRef.current = false;
     setDragZone(zone);
     if (zone === 'lens' && lens) {
       const yr = lens.yearAtLens(x);
       setPreview(yr);
       onChange(yr);
     } else {
-      const yr = yearOnTrack(yearAt(x), y);
+      const yr = yearAt(x);
       setLensCenter(yr);
       setPreview(yr);
       onChange(yr);
@@ -281,6 +293,14 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
   };
 
   const handleUp = (e: ReactPointerEvent) => {
+    const down = downRef.current;
+    if (down?.onBand && !draggedRef.current) {
+      const yr = snapEraClick(yearAt(down.x));
+      setLensCenter(yr);
+      setPreview(yr);
+      onChange(yr);
+    }
+    downRef.current = null;
     setDragZone(null);
     try {
       (e.currentTarget as Element).releasePointerCapture(e.pointerId);
@@ -306,11 +326,13 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
       const dir = Math.sign(e.deltaY || e.deltaX);
       if (!dir) return;
       const step = e.altKey ? 100 : e.shiftKey ? 10 : 1;
-      onChange(clampYear(year + dir * step));
+      const next = clampYear(yearRef.current + dir * step);
+      yearRef.current = next;
+      onChange(next);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [year, onChange]);
+  }, [onChange]);
 
   // ── Static macro decorations ───────────────────────────────────────────
   const macroTicks = useMemo(() => {
