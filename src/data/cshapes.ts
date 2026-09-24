@@ -75,11 +75,39 @@ export function filterCshapesYear(raw: FeatureCollection, year: number): Feature
   return { type: 'FeatureCollection', features: [...chosen.values()] };
 }
 
+let warming = false;
+
+function warmYearCache(raw: FeatureCollection) {
+  if (warming) return;
+  warming = true;
+  const years = CSHAPES_CHANGE_YEARS.filter((y) => y >= CSHAPES_START && y <= CSHAPES_END);
+  let i = 0;
+  const step = () => {
+    const end = Math.min(i + 3, years.length);
+    for (; i < end; i++) {
+      const y = years[i];
+      if (yearCache.has(y)) continue;
+      yearCache.set(y, Promise.resolve(prepareSnapshot(filterCshapesYear(raw, y))));
+    }
+    if (i < years.length) {
+      const ric = globalThis.requestIdleCallback;
+      if (ric) ric(step, { timeout: 250 });
+      else setTimeout(step, 0);
+    }
+  };
+  const ric = globalThis.requestIdleCallback;
+  if (ric) ric(step, { timeout: 250 });
+  else setTimeout(step, 0);
+}
+
 export function loadCshapesYear(year: number): Promise<PreparedSnapshot> {
   const y = cshapesMapYear(year);
   let p = yearCache.get(y);
   if (!p) {
-    p = loadRaw().then((raw) => prepareSnapshot(filterCshapesYear(raw, y)));
+    p = loadRaw().then((raw) => {
+      warmYearCache(raw);
+      return prepareSnapshot(filterCshapesYear(raw, y));
+    });
     yearCache.set(y, p);
   }
   return p;

@@ -1,5 +1,3 @@
-import polylabel from 'polylabel';
-import area from '@turf/area';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon, Point, MultiLineString, Position } from 'geojson';
 import { classifyRegion, colorForPower, CULTURE_FILL, UNCLAIMED_FILL, type RegionKind } from './colors';
 
@@ -45,24 +43,44 @@ function ringArea(ring: Position[]): number {
   return Math.abs(s / 2);
 }
 
-function largestPolygon(geom: MultiPolygon | Polygon): Position[][] {
-  if (geom.type === 'Polygon') return geom.coordinates;
-  let best = geom.coordinates[0];
+function largestRing(geom: MultiPolygon | Polygon): Position[] {
+  if (geom.type === 'Polygon') return geom.coordinates[0];
+  let best = geom.coordinates[0][0];
   let bestArea = -1;
   for (const poly of geom.coordinates) {
     const a = ringArea(poly[0]);
     if (a > bestArea) {
       bestArea = a;
-      best = poly;
+      best = poly[0];
     }
   }
   return best;
 }
 
+function ringBboxCenter(ring: Position[]): Position {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return [(minX + maxX) / 2, (minY + maxY) / 2];
+}
+
+function approxAreaKm2(geom: MultiPolygon | Polygon): number {
+  let deg2 = 0;
+  if (geom.type === 'Polygon') deg2 = ringArea(geom.coordinates[0]);
+  else for (const poly of geom.coordinates) deg2 += ringArea(poly[0]);
+  return deg2 * 12321;
+}
+
 /**
- * Enrich a raw snapshot: classify regions, assign colours, compute areas and
- * generate one label anchor per region (pole of inaccessibility of its largest
- * polygon, so labels sit well inside irregular shapes).
+ * Enrich a raw snapshot: classify regions, assign colours, and place one label
+ * at the bbox centre of each region’s largest ring.
  */
 export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
   const regions: RegionFeature[] = [];
@@ -76,7 +94,7 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
     const kind = classifyRegion(name, precision);
     const power = (p.SUBJECTO && p.SUBJECTO !== '3' ? p.SUBJECTO : name) ?? '';
     const color = kind === 'polity' ? colorForPower(power) : kind === 'culture' ? CULTURE_FILL : UNCLAIMED_FILL;
-    const areaKm2 = area(f as Feature) / 1e6;
+    const areaKm2 = approxAreaKm2(f.geometry);
     const fid = Number(p.fid ?? regions.length);
     const props: RegionProps = {
       fid,
@@ -93,9 +111,7 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
     regions.push({ type: 'Feature', id: fid, geometry: f.geometry, properties: props });
 
     if (name) {
-      const poly = largestPolygon(f.geometry);
-      const pt = polylabel(poly as [number, number][][], 0.25) as unknown as Position;
-      labelsRaw.push({ fid, name, kind, areaKm2, color, pt });
+      labelsRaw.push({ fid, name, kind, areaKm2, color, pt: ringBboxCenter(largestRing(f.geometry)) });
     }
   }
 

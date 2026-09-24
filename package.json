@@ -14,15 +14,12 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@turf/area": "^7.4.0",
     "maplibre-gl": "^6.7.0",
-    "polylabel": "^2.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@types/polylabel": "^2.0.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",

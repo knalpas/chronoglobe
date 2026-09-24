@@ -168,8 +168,13 @@ function buildStyle(): StyleSpecification {
     'text-letter-spacing': ['case', ['==', ['get', 'kind'], 'polity'], 0.14, 0.03],
     'text-max-width': 7,
     'text-line-height': 1.1,
-    'text-padding': 6,
+    'text-padding': 2,
     'symbol-sort-key': ['get', 'rank'],
+  };
+  const largeLabelLayout: SymbolLayerSpecification['layout'] = {
+    ...labelLayout,
+    'text-allow-overlap': true,
+    'text-ignore-placement': true,
   };
   const labelPaint: SymbolLayerSpecification['paint'] = {
     'text-color': ['case', ['==', ['get', 'kind'], 'culture'], '#6f5f4c', '#33281d'],
@@ -268,7 +273,7 @@ function buildStyle(): StyleSpecification {
         type: 'symbol',
         source: 'labels',
         filter: ['>=', ['get', 'size'], 0.5],
-        layout: labelLayout,
+        layout: largeLabelLayout,
         paint: labelPaint,
       },
       {
