@@ -542,57 +542,44 @@ export default function Globe({
     map.setPadding(chromePadding(panelCollapsed));
   }, [panelCollapsed, ready]);
 
-  const pendingSnap = useRef(snapshot);
-  pendingSnap.current = snapshot;
-  const loadBusy = useRef(false);
+  const loadGen = useRef(0);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-
-    const run = () => {
-      if (loadBusy.current) return;
-      const wanted = pendingSnap.current;
-      loadBusy.current = true;
-      const loadingTimer = window.setTimeout(() => onLoadingChange(true), 160);
-      loadSnapshot(wanted)
-        .then((prepared) => {
-          clearTimeout(loadingTimer);
-          const mapNow = mapRef.current;
-          const latest = pendingSnap.current;
-          const stillWanted = latest.file === wanted.file && latest.year === wanted.year;
-          if (mapNow && stillWanted) {
-            if (mapNow.getLayer('land-fill') && wanted.source === 'cshapes') {
-              mapNow.setLayoutProperty('land-fill', 'visibility', 'visible');
-            }
-            source(mapNow, 'regions')?.setData(prepared.regions);
-            source(mapNow, 'labels')?.setData(withLabelSize(prepared.labels));
-            if (mapNow.getLayer('land-fill') && wanted.source !== 'cshapes') {
-              mapNow.once('idle', () => {
-                if (!mapRef.current) return;
-                mapNow.setLayoutProperty('land-fill', 'visibility', 'none');
-              });
-            }
-            regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
-            hoveredRef.current = null;
-            onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
-            onLoadingChange(false);
-          }
-          loadBusy.current = false;
-          const next = pendingSnap.current;
-          if (next.file !== wanted.file || next.year !== wanted.year) run();
-        })
-        .catch((err) => {
-          console.error(err);
-          clearTimeout(loadingTimer);
-          loadBusy.current = false;
-          onLoadingChange(false);
-          const next = pendingSnap.current;
-          if (next.file !== wanted.file || next.year !== wanted.year) run();
-        });
+    const wanted = snapshot;
+    const gen = ++loadGen.current;
+    const loadingTimer = window.setTimeout(() => {
+      if (loadGen.current === gen) onLoadingChange(true);
+    }, 160);
+    loadSnapshot(wanted)
+      .then((prepared) => {
+        clearTimeout(loadingTimer);
+        if (gen !== loadGen.current || !mapRef.current) return;
+        if (map.getLayer('land-fill') && wanted.source === 'cshapes') {
+          map.setLayoutProperty('land-fill', 'visibility', 'visible');
+        }
+        source(map, 'regions')?.setData(prepared.regions);
+        source(map, 'labels')?.setData(withLabelSize(prepared.labels));
+        if (map.getLayer('land-fill') && wanted.source !== 'cshapes') {
+          map.once('idle', () => {
+            if (gen !== loadGen.current || !mapRef.current) return;
+            map.setLayoutProperty('land-fill', 'visibility', 'none');
+          });
+        }
+        regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+        hoveredRef.current = null;
+        onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
+        onLoadingChange(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        clearTimeout(loadingTimer);
+        if (gen === loadGen.current) onLoadingChange(false);
+      });
+    return () => {
+      clearTimeout(loadingTimer);
     };
-
-    run();
   }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange, onRegionCount]);
 
   useEffect(() => {

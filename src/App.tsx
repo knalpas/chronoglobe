@@ -30,10 +30,11 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
 
-  const snapshot = useMemo(() => snapshotFor(year), [year]);
+  const shownYear = previewYear ?? year;
+  const snapshot = useMemo(() => snapshotFor(shownYear), [shownYear]);
   const visibleEvents = useMemo(
-    () => eventsNear(year, eventWindow(year), selectedEventId),
-    [year, selectedEventId],
+    () => eventsNear(shownYear, eventWindow(shownYear), selectedEventId),
+    [shownYear, selectedEventId],
   );
   const selectedEvent = useMemo(() => ALL_EVENTS.find((e) => e.id === selectedEventId) ?? null, [selectedEventId]);
 
@@ -179,7 +180,6 @@ export default function App() {
     }
   }, []);
 
-  const shownYear = previewYear ?? year;
   const era = eraFor(shownYear);
   const prevEv = prevEventYear(year);
   const nextEv = nextEventYear(year);
@@ -187,7 +187,7 @@ export default function App() {
   return (
     <div className={`app${panelCollapsed ? ' panel-min' : ''}`}>
       <Globe
-        year={year}
+        year={shownYear}
         snapshot={snapshot}
         visibleEvents={visibleEvents}
         selectedEventId={selectedEventId}
@@ -215,7 +215,7 @@ export default function App() {
       />
 
       <SummaryPanel
-        year={year}
+        year={shownYear}
         snapshot={snapshot}
         visibleEvents={visibleEvents}
         selectedEvent={selectedEvent}
