@@ -9,7 +9,13 @@ export const CSHAPES_END = 2019;
 export { CSHAPES_CHANGE_YEARS };
 
 export function cshapesMapYear(year: number): number {
-  return Math.min(CSHAPES_END, Math.max(CSHAPES_START, year));
+  const y = Math.min(CSHAPES_END, Math.max(CSHAPES_START, year));
+  let latest = CSHAPES_START;
+  for (const c of CSHAPES_CHANGE_YEARS) {
+    if (c <= y) latest = c;
+    else break;
+  }
+  return latest;
 }
 
 export function usesCshapes(year: number): boolean {
