@@ -551,8 +551,6 @@ export default function Globe({
   const wantedRef = useRef(snapshot);
   wantedRef.current = snapshot;
   const lastAppliedRef = useRef('');
-  const paintBusy = useRef(false);
-  const paintQueue = useRef<{ prepared: PreparedSnapshot; snap: Snapshot } | null>(null);
   const paintCbs = useRef({ onLoadingChange, onRegionCount });
   paintCbs.current = { onLoadingChange, onRegionCount };
 
@@ -568,11 +566,6 @@ export default function Globe({
       }
       return;
     }
-    if (paintBusy.current) {
-      paintQueue.current = { prepared, snap };
-      return;
-    }
-    paintBusy.current = true;
     if (map.getLayer('land-fill') && snap.source === 'cshapes') {
       map.setLayoutProperty('land-fill', 'visibility', 'visible');
     }
@@ -595,25 +588,6 @@ export default function Globe({
       const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 240));
       idle(() => prefetchNeighbors(snap.file));
     }
-
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      paintBusy.current = false;
-      const q = paintQueue.current;
-      paintQueue.current = null;
-      const now = wantedRef.current;
-      if (q && q.snap.file === now.file && q.snap.year === now.year) {
-        applyToMap(q.prepared, q.snap);
-        return;
-      }
-      if (snapKey(now) !== lastAppliedRef.current) {
-        void loadSnapshot(now).then((p) => applyToMap(p, now));
-      }
-    };
-    map.once('idle', settle);
-    window.setTimeout(settle, 280);
   };
 
   useEffect(() => {

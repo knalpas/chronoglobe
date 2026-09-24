@@ -85,8 +85,9 @@ function labelSize(areaKm2: number): number {
 }
 
 /**
- * Enrich a raw snapshot in place: classify regions, assign colours, and place
- * one label at the bbox centre of each region’s largest ring.
+ * Enrich a raw snapshot: classify regions, assign colours, and place one label
+ * at the bbox centre of each region’s largest ring. Geometry is reused; the
+ * source feature’s properties are left intact so CShapes can be filtered again.
  */
 export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
   const regions: RegionFeature[] = [];
@@ -114,9 +115,7 @@ export function prepareSnapshot(raw: FeatureCollection): PreparedSnapshot {
       power,
       areaKm2,
     };
-    f.id = fid;
-    f.properties = props;
-    regions.push(f as RegionFeature);
+    regions.push({ type: 'Feature', id: fid, geometry: f.geometry, properties: props });
 
     if (name) {
       labelsRaw.push({ fid, name, kind, areaKm2, color, pt: ringBboxCenter(largestRing(f.geometry)) });
