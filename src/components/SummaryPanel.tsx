@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { CATEGORY_META, nextEventYear, prevEventYear, type HistoricalEvent } from '../data/events';
 import { eraFor } from '../data/eras';
 import { nextBorderYear, type Snapshot } from '../data/snapshots';
 import type { RegionProps } from '../lib/geo';
 import { eventWindow, formatYear } from '../lib/time';
+import { briefingHint, fetchPolitySummary, type PolitySummary } from '../lib/wikiSummary';
 
 interface SummaryPanelProps {
   year: number;
@@ -35,6 +37,35 @@ function formatArea(km2: number) {
   return `${Math.round(km2).toLocaleString()} km²`;
 }
 
+function usePolityBriefing(name: string | undefined, year: number) {
+  const [brief, setBrief] = useState<PolitySummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!name) {
+      setBrief(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setBrief(null);
+    fetchPolitySummary(name, year)
+      .then((s) => {
+        if (!cancelled) setBrief(s);
+      })
+      .catch(() => {
+        if (!cancelled) setBrief(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [name, year]);
+  return { brief, loading };
+}
+
 export default function SummaryPanel({
   year,
   snapshot,
@@ -56,6 +87,7 @@ export default function SummaryPanel({
   const nearby = visibleEvents.filter((e) => e.year !== year);
   const prevY = prevEventYear(year - window);
   const nextY = nextEventYear(year + window);
+  const { brief, loading: briefLoading } = usePolityBriefing(selectedRegion?.NAME, year);
 
   if (collapsed) {
     return (
@@ -139,6 +171,13 @@ export default function SummaryPanel({
               </button>
             </div>
             <h2 className="card-title">{selectedRegion.NAME ?? 'No recorded polity'}</h2>
+            {briefLoading && <p className="panel-text muted">Looking up a short briefing…</p>}
+            {brief && (
+              <p className="region-blurb">
+                {brief.extract}
+                <span className="region-blurb-src">{briefingHint(year)}</span>
+              </p>
+            )}
             <dl className="kv">
               {selectedRegion.SUBJECTO && selectedRegion.SUBJECTO !== selectedRegion.NAME && selectedRegion.SUBJECTO !== '3' && (
                 <>
@@ -159,8 +198,13 @@ export default function SummaryPanel({
             </dl>
             {selectedRegion.NAME && (
               <div className="card-actions">
-                <a className="btn ghost" href={wikiSearch(selectedRegion.NAME)} target="_blank" rel="noreferrer">
-                  Look up on Wikipedia ↗
+                <a
+                  className="btn ghost"
+                  href={brief?.url ?? wikiSearch(selectedRegion.NAME)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Wikipedia ↗
                 </a>
               </div>
             )}

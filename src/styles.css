@@ -489,6 +489,19 @@ a:hover {
   margin: 2px 0 8px;
   line-height: 1.15;
 }
+.region-blurb {
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.region-blurb-src {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
 .card-actions {
   display: flex;
   gap: 8px;

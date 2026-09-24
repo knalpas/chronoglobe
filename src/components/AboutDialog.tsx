@@ -28,7 +28,9 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
         <div className="modal-body">
           <p>
             Chronoglobe shows the political map of the world at any year from 5000 BC to today. Drag the timeline, hover
-            it to open a magnifying lens for year-by-year precision, and click any state or event marker for details.
+            it to open a magnifying lens for year-by-year precision, and click any state or event marker for details. A
+            clicked state loads a short Wikipedia briefing, choosing the article whose dates best match the year on the
+            timeline.
             The address bar updates as you move; add <code>?year=1492</code> or <code>?year=44bc</code> to open a year
             directly, or use the Link button to copy it.
           </p>
