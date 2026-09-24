@@ -542,65 +542,57 @@ export default function Globe({
     map.setPadding(chromePadding(panelCollapsed));
   }, [panelCollapsed, ready]);
 
-  useEffect(() => {
-    if (!ready) return;
-    loadCshapesYear(1886);
-    loadSnapshot({ file: '1880', year: 1880, source: 'basemaps', summary: '' });
-  }, [ready]);
-
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
-  const applyBusy = useRef(false);
+  const pendingSnap = useRef(snapshot);
+  pendingSnap.current = snapshot;
+  const loadBusy = useRef(false);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    if (applyBusy.current) return;
 
-    const pump = () => {
-      const wanted = snapshotRef.current;
-      applyBusy.current = true;
-      const loadingTimer = window.setTimeout(() => onLoadingChange(true), 200);
+    const run = () => {
+      if (loadBusy.current) return;
+      const wanted = pendingSnap.current;
+      loadBusy.current = true;
+      const loadingTimer = window.setTimeout(() => onLoadingChange(true), 160);
       loadSnapshot(wanted)
         .then((prepared) => {
           clearTimeout(loadingTimer);
-          if (!mapRef.current) {
-            applyBusy.current = false;
-            return;
+          const mapNow = mapRef.current;
+          const latest = pendingSnap.current;
+          const stillWanted = latest.file === wanted.file && latest.year === wanted.year;
+          if (mapNow && stillWanted) {
+            if (mapNow.getLayer('land-fill') && wanted.source === 'cshapes') {
+              mapNow.setLayoutProperty('land-fill', 'visibility', 'visible');
+            }
+            source(mapNow, 'regions')?.setData(prepared.regions);
+            source(mapNow, 'labels')?.setData(withLabelSize(prepared.labels));
+            if (mapNow.getLayer('land-fill') && wanted.source !== 'cshapes') {
+              mapNow.once('idle', () => {
+                if (!mapRef.current) return;
+                mapNow.setLayoutProperty('land-fill', 'visibility', 'none');
+              });
+            }
+            regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
+            hoveredRef.current = null;
+            onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
+            onLoadingChange(false);
           }
-          const latest = snapshotRef.current;
-          if (latest.file !== wanted.file || latest.year !== wanted.year) {
-            pump();
-            return;
-          }
-          if (map.getLayer('land-fill') && wanted.source === 'cshapes') {
-            map.setLayoutProperty('land-fill', 'visibility', 'visible');
-          }
-          source(map, 'regions')?.setData(prepared.regions);
-          source(map, 'labels')?.setData(withLabelSize(prepared.labels));
-          if (map.getLayer('land-fill') && wanted.source !== 'cshapes') {
-            map.once('idle', () => {
-              if (!mapRef.current) return;
-              map.setLayoutProperty('land-fill', 'visibility', 'none');
-            });
-          }
-          regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
-          hoveredRef.current = null;
-          onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
-          applyBusy.current = false;
-          onLoadingChange(false);
+          loadBusy.current = false;
+          const next = pendingSnap.current;
+          if (next.file !== wanted.file || next.year !== wanted.year) run();
         })
         .catch((err) => {
           console.error(err);
           clearTimeout(loadingTimer);
-          applyBusy.current = false;
+          loadBusy.current = false;
           onLoadingChange(false);
-          const latest = snapshotRef.current;
-          if (latest.file !== wanted.file || latest.year !== wanted.year) pump();
+          const next = pendingSnap.current;
+          if (next.file !== wanted.file || next.year !== wanted.year) run();
         });
     };
 
-    pump();
+    run();
   }, [snapshot.file, snapshot.year, snapshot.source, ready, onLoadingChange, onRegionCount]);
 
   useEffect(() => {
