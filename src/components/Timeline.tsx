@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ERAS } from '../data/eras';
+import { eraFor, ERAS } from '../data/eras';
 import { ALL_EVENTS, CATEGORY_META, CURATED_EVENTS, type HistoricalEvent } from '../data/events';
 import { CSHAPES_CHANGE_YEARS, CSHAPES_START } from '../data/cshapes';
 import { SNAPSHOT_YEARS } from '../data/snapshots';
@@ -143,6 +143,23 @@ const MACRO_TICK_YEARS = [
 
 type Zone = 'track' | 'lens';
 
+/** Era-band clicks land on a snapshot that actually belongs to that era. */
+function yearOnTrack(yearAtX: number, y: number): number {
+  if (y < BAND_TOP - 2 || y > BAND_BOTTOM + 2) return yearAtX;
+  const era = eraFor(yearAtX);
+  let best: number | null = null;
+  let bestD = Infinity;
+  for (const y0 of BORDER_TICK_YEARS) {
+    if (y0 < era.start || y0 > era.end) continue;
+    const d = Math.abs(y0 - yearAtX);
+    if (d < bestD) {
+      best = y0;
+      bestD = d;
+    }
+  }
+  return best ?? clampYear(Math.round((era.start + era.end) / 2));
+}
+
 export default function Timeline({ year, onChange, onPreview, highlightEventId, onPickEvent }: TimelineProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -194,6 +211,8 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
 
   // ── Pointer handling ────────────────────────────────────────────────────
   const zoneAt = (x: number, y: number): Zone => {
+    // Era band and below always pick the coarse year, even if the lens is open.
+    if (y >= BAND_TOP - 2) return 'track';
     if (lens && y <= LENS_BOTTOM + 8 && x >= lens.left - 6 && x <= lens.right + 6) return 'lens';
     return 'track';
   };
@@ -207,7 +226,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
     const { x, y } = localPoint(e);
     setPointerX(x);
     if (dragZone === 'track') {
-      const yr = yearAt(x);
+      const yr = yearOnTrack(yearAt(x), y);
       setLensCenter(yr);
       setPreview(yr);
       onChange(yr);
@@ -236,7 +255,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
       setPreview(yr);
       onPreview?.(yr);
     } else {
-      const yr = yearAt(x);
+      const yr = yearOnTrack(yearAt(x), y);
       setLensCenter(yr);
       setPreview(yr);
       onPreview?.(yr);
@@ -254,7 +273,7 @@ export default function Timeline({ year, onChange, onPreview, highlightEventId, 
       setPreview(yr);
       onChange(yr);
     } else {
-      const yr = yearAt(x);
+      const yr = yearOnTrack(yearAt(x), y);
       setLensCenter(yr);
       setPreview(yr);
       onChange(yr);

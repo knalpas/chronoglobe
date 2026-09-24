@@ -551,42 +551,60 @@ export default function Globe({
   const wantedRef = useRef(snapshot);
   wantedRef.current = snapshot;
   const lastAppliedRef = useRef('');
+  const paintBusy = useRef(false);
   const paintCbs = useRef({ onLoadingChange, onRegionCount });
   paintCbs.current = { onLoadingChange, onRegionCount };
 
   const snapKey = (s: Snapshot) => `${s.source}:${s.file}:${s.year}`;
 
-  const applyToMap = (prepared: PreparedSnapshot, snap: Snapshot) => {
+  const paintNow = async (prepared: PreparedSnapshot, snap: Snapshot) => {
     const map = mapRef.current;
     if (!map) return;
-    const latest = wantedRef.current;
-    if (latest.file !== snap.file || latest.year !== snap.year) {
-      if (snapKey(latest) !== lastAppliedRef.current) {
-        void loadSnapshot(latest).then((p) => applyToMap(p, latest));
-      }
-      return;
-    }
     if (map.getLayer('land-fill') && snap.source === 'cshapes') {
       map.setLayoutProperty('land-fill', 'visibility', 'visible');
     }
-    source(map, 'regions')?.setData(prepared.regions);
-    source(map, 'labels')?.setData(prepared.labels);
-    if (map.getLayer('land-fill') && snap.source !== 'cshapes') {
-      map.once('idle', () => {
-        if (!mapRef.current) return;
-        if (wantedRef.current.file === snap.file) {
-          map.setLayoutProperty('land-fill', 'visibility', 'none');
-        }
-      });
-    }
+    const regions = source(map, 'regions');
+    const labels = source(map, 'labels');
+    const tasks: Promise<void>[] = [];
+    if (regions) tasks.push(regions.setData(prepared.regions));
+    if (labels) tasks.push(labels.setData(prepared.labels));
     regionsRef.current = new Map(prepared.regions.features.map((f) => [f.properties.fid, f.properties]));
     hoveredRef.current = null;
     lastAppliedRef.current = snapKey(snap);
+    shellRef.current?.setAttribute('data-map-file', snap.file);
     paintCbs.current.onRegionCount(prepared.regions.features.filter((f) => f.properties.kind === 'polity').length);
     paintCbs.current.onLoadingChange(false);
     if (snap.source !== 'cshapes') {
       const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 240));
       idle(() => prefetchNeighbors(snap.file));
+    }
+    await Promise.all(tasks);
+    if (map.getLayer('land-fill') && snap.source !== 'cshapes' && wantedRef.current.file === snap.file) {
+      map.setLayoutProperty('land-fill', 'visibility', 'none');
+    }
+  };
+
+  const runPaintQueue = async () => {
+    if (paintBusy.current) return;
+    paintBusy.current = true;
+    try {
+      while (mapRef.current && snapKey(wantedRef.current) !== lastAppliedRef.current) {
+        const snap = wantedRef.current;
+        try {
+          const prepared = await loadSnapshot(snap);
+          if (snapKey(wantedRef.current) !== snapKey(snap)) continue;
+          await paintNow(prepared, snap);
+        } catch (err) {
+          console.error(err);
+          if (snapKey(wantedRef.current) === snapKey(snap)) paintCbs.current.onLoadingChange(false);
+          break;
+        }
+      }
+    } finally {
+      paintBusy.current = false;
+      if (mapRef.current && snapKey(wantedRef.current) !== lastAppliedRef.current) {
+        void runPaintQueue();
+      }
     }
   };
 
@@ -598,9 +616,9 @@ export default function Globe({
       if (snapKey(wantedRef.current) !== lastAppliedRef.current) onLoadingChange(true);
     }, 120);
     loadSnapshot(wanted)
-      .then((prepared) => {
+      .then(() => {
         clearTimeout(loadingTimer);
-        applyToMap(prepared, wanted);
+        void runPaintQueue();
       })
       .catch((err) => {
         clearTimeout(loadingTimer);
